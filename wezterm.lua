@@ -5,13 +5,15 @@ local color_scheme = require("features.color_scheme")
 local tab_navigation = require("features.tab_navigation")
 
 local features = {
-  color_scheme,
-  agent_tab_state,
-  tab_navigation,
+  { module = color_scheme, enabled = true },
+  { module = agent_tab_state, enabled = false },
+  { module = tab_navigation, enabled = true },
 }
 
 for _, feature in ipairs(features) do
-  feature.apply(config)
+  if feature.enabled then
+    feature.module.apply(config)
+  end
 end
 
 return config

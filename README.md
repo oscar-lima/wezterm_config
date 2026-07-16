@@ -40,7 +40,7 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 
 | File | Function added to WezTerm |
 | --- | --- |
-| `wezterm.lua` | Builds the configuration and applies each feature module. |
+| `wezterm.lua` | Builds the configuration and applies enabled feature modules in their listed order. |
 | `features/agent_tab_state.lua` | Adds colored tab-title indicators for structured agent lifecycle state. |
 | `features/color_scheme.lua` | Selects the `Gruvbox Dark (Gogh)` color scheme. |
 | `features/tab_navigation.lua` | Adds Alt+Left/Right tab cycling and Alt+1–9 direct tab selection. |
@@ -111,5 +111,22 @@ set -g allow-passthrough on
 
 Add one descriptively named Lua file under `features/`. The module must expose
 an `apply(config)` function that changes only the settings needed by that
-feature. Import it in the `features` table in `wezterm.lua`, then add its
-filename and behavior to the table above.
+feature. Import it in `wezterm.lua`, add it to the `features` table with an
+`enabled` flag, then add its filename and behavior to the table above.
+
+## Enabling and disabling features
+
+Each entry in the ordered `features` table in `wezterm.lua` has an `enabled`
+flag:
+
+```lua
+local features = {
+  { module = color_scheme, enabled = true },
+  { module = agent_tab_state, enabled = false },
+  { module = tab_navigation, enabled = true },
+}
+```
+
+Set a feature to `false` to disable it, or back to `true` to enable it. Keep the
+entries in their existing order unless a feature needs to run before another
+one.
