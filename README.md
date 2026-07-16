@@ -43,7 +43,7 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 | `wezterm.lua` | Builds the configuration and applies enabled feature modules in their listed order. |
 | `features/agent_tab_state.lua` | Adds colored tab-title indicators for structured agent lifecycle state. |
 | `features/color_scheme.lua` | Selects the `Gruvbox Dark (Gogh)` color scheme. |
-| `features/initial_pane_layout.lua` | Starts the GUI and new tabs with two side-by-side panes and adds Alt+PageUp/PageDown navigation between them. |
+| `features/initial_pane_layout.lua` | Starts the GUI and new tabs with consistently proportioned side-by-side panes and adds Alt+PageUp/PageDown navigation between them. |
 | `features/pane_working_directory_sync.lua` | Keeps the right pane in the left pane's working directory whenever the right pane is at a shell prompt. |
 | `features/tab_navigation.lua` | Adds Alt+Left/Right tab cycling and Alt+1–9 direct tab selection. |
 | `features/two_pane_tab_controls.lua` | Adds Ctrl+W closing of the current tab with both panes. |
@@ -58,6 +58,9 @@ Each new WezTerm GUI starts with two terminal panes arranged side by side. New
 tabs opened with Ctrl+Shift+T, Super+T, or the tab-bar `+` button use the same
 layout. Alt+PageUp focuses the pane to the left, and Alt+PageDown focuses the
 pane to the right.
+
+The initial GUI split waits until the window is attached and sized before it is
+created, so it uses the same proportions as tabs opened later.
 
 Alt+Left/Right move between tabs. Pane focus remains on Alt+PageUp/PageDown.
 Ctrl+W closes the current tab, including both panes that belong to it.

@@ -7,6 +7,8 @@ local M = {}
 
 -- Set this to the percentage of the window that the left pane should occupy.
 local left_pane_percentage = 70
+local startup_split_delay_seconds = 0.1
+local pending_startup_pane_ids = {}
 
 local function validate_left_pane_percentage()
   assert(
@@ -33,12 +35,35 @@ local function spawn_tab_with_layout(window)
   split_pane(left_pane)
 end
 
+local function split_pending_startup_panes()
+  local pane_ids = pending_startup_pane_ids
+  pending_startup_pane_ids = {}
+
+  wezterm.time.call_after(startup_split_delay_seconds, function()
+    for _, pane_id in ipairs(pane_ids) do
+      local left_pane = mux.get_pane(pane_id)
+      local tab = left_pane and left_pane:tab()
+
+      -- Wait for final GUI dimensions, and avoid duplicating a user-created split.
+      if tab and #tab:panes() == 1 then
+        split_pane(left_pane)
+      end
+    end
+  end)
+end
+
 function M.apply(config)
   validate_left_pane_percentage()
 
   wezterm.on("gui-startup", function(command)
     local _, left_pane = mux.spawn_window(command or {})
-    split_pane(left_pane)
+    table.insert(pending_startup_pane_ids, left_pane:pane_id())
+  end)
+
+  wezterm.on("gui-attached", function()
+    if #pending_startup_pane_ids > 0 then
+      split_pending_startup_panes()
+    end
   end)
 
   wezterm.on("new-tab-button-click", function(window, _, button)
