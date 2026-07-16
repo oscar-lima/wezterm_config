@@ -6,7 +6,7 @@ local tab_navigation = require("features.tab_navigation")
 
 local features = {
   { module = color_scheme, enabled = true },
-  { module = agent_tab_state, enabled = false },
+  { module = agent_tab_state, enabled = true },
   { module = tab_navigation, enabled = true },
 }
 
