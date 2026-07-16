@@ -1,0 +1,39 @@
+#!/bin/sh
+
+# Publish agent state to the current WezTerm pane without printing visible text.
+case "${1:-}" in
+  running|completed|failed|attention)
+    state=$1
+    ;;
+  clear|idle)
+    state=
+    ;;
+  *)
+    echo "usage: wezterm-agent-state {running|completed|failed|attention|clear}" >&2
+    exit 2
+    ;;
+esac
+
+# Hooks may also run in other terminals; silently do nothing there.
+if [ -z "${WEZTERM_PANE:-}" ]; then
+  exit 0
+fi
+
+# Some hook runners detach from the terminal even if they inherit WEZTERM_PANE.
+if ! (: > /dev/tty) 2>/dev/null; then
+  exit 0
+fi
+
+if ! command -v base64 >/dev/null 2>&1; then
+  echo "wezterm-agent-state: base64 is required" >&2
+  exit 1
+fi
+
+encoded=$(printf %s "$state" | base64 | tr -d '\n')
+
+if [ -n "${TMUX:-}" ]; then
+  # tmux requires allow-passthrough for terminal-specific OSC sequences.
+  printf '\033Ptmux;\033\033]1337;SetUserVar=agent_state=%s\007\033\\' "$encoded" > /dev/tty
+else
+  printf '\033]1337;SetUserVar=agent_state=%s\007' "$encoded" > /dev/tty
+fi
