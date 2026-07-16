@@ -43,11 +43,34 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 | `wezterm.lua` | Builds the configuration and applies enabled feature modules in their listed order. |
 | `features/agent_tab_state.lua` | Adds colored tab-title indicators for structured agent lifecycle state. |
 | `features/color_scheme.lua` | Selects the `Gruvbox Dark (Gogh)` color scheme. |
+| `features/initial_pane_layout.lua` | Starts the GUI and new tabs with two side-by-side panes and adds Alt+PageUp/PageDown navigation between them. |
+| `features/pane_working_directory_sync.lua` | Keeps the right pane in the left pane's working directory whenever the right pane is at a shell prompt. |
 | `features/tab_navigation.lua` | Adds Alt+Left/Right tab cycling and Alt+1–9 direct tab selection. |
+| `features/two_pane_tab_controls.lua` | Adds Ctrl+W closing of the current tab with both panes. |
 | `bin/wezterm-agent-state` | Publishes an agent state to the current pane using a WezTerm user variable. |
 | `integrations/claude-code-hooks.json` | Provides Claude Code lifecycle hooks for tab state. |
 | `integrations/codex-hooks.toml` | Provides Codex lifecycle hooks for tab state. |
 | `integrations/opencode-agent-state.js` | Provides an opencode plugin for tab state. |
+
+## Initial pane layout
+
+Each new WezTerm GUI starts with two terminal panes arranged side by side. New
+tabs opened with Ctrl+Shift+T, Super+T, or the tab-bar `+` button use the same
+layout. Alt+PageUp focuses the pane to the left, and Alt+PageDown focuses the
+pane to the right.
+
+Alt+Left/Right move between tabs. Pane focus remains on Alt+PageUp/PageDown.
+Ctrl+W closes the current tab, including both panes that belong to it.
+
+Set `left_pane_percentage` near the top of
+`features/initial_pane_layout.lua` to control the initial proportions. For
+example, `50` gives both panes equal space, while `60` gives the left pane 60%
+and the right pane 40%. The value must be greater than `0` and less than `100`.
+
+The left pane is authoritative for the working directory. If its directory
+changes, the right pane follows within about half a second once the right pane
+is back at a Bash, Zsh, Fish, Dash, or POSIX shell prompt. A program running in
+the right pane is not interrupted; synchronization resumes when it exits.
 
 ## Agent state in tabs
 
@@ -123,7 +146,10 @@ flag:
 local features = {
   { module = color_scheme, enabled = true },
   { module = agent_tab_state, enabled = false },
+  { module = initial_pane_layout, enabled = true },
+  { module = pane_working_directory_sync, enabled = true },
   { module = tab_navigation, enabled = true },
+  { module = two_pane_tab_controls, enabled = true },
 }
 ```
 
