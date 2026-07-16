@@ -10,11 +10,31 @@ whole repository there so that `wezterm.lua` can import the feature modules:
 ```bash
 rm -f ~/.wezterm.lua
 mkdir -p ~/.config
-ln -sfn ~/wezterm_config ~/.config/wezterm
+
+# Back up an existing config path. This also avoids ln placing the repository
+# symlink inside an existing ~/.config/wezterm directory.
+if [ -e ~/.config/wezterm ] || [ -L ~/.config/wezterm ]; then
+  mv ~/.config/wezterm ~/.config/wezterm.backup-$(date +%Y%m%d-%H%M%S)
+fi
+
+ln -s ~/wezterm_config ~/.config/wezterm
 ```
 
 The final command assumes this repository is located at `~/wezterm_config`.
-Change the source path if you cloned it elsewhere.
+Change the source path if you cloned it elsewhere. For this checkout, use:
+
+```bash
+ln -s /home/oscar/repos_cloned/wezterm_config ~/.config/wezterm
+```
+
+Verify that WezTerm can see the entry point and that the configuration directory
+itself, rather than a child within it, is the symlink:
+
+```bash
+readlink -f ~/.config/wezterm
+test -f ~/.config/wezterm/wezterm.lua
+wezterm show-keys --lua | grep "mods = 'ALT'"
+```
 
 ## Files and features
 
