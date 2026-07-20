@@ -59,8 +59,9 @@ tabs opened with Ctrl+Shift+T, Super+T, or the tab-bar `+` button use the same
 layout. Alt+PageUp focuses the pane to the left, and Alt+PageDown focuses the
 pane to the right.
 
-The initial GUI split waits until the window is attached and sized before it is
-created, so it uses the same proportions as tabs opened later.
+The initial GUI split is created on the first resize event, with the first
+status update as a fallback. Its measured pane widths are then corrected to the
+configured percentage after startup resizing finishes, matching later tabs.
 
 Alt+Left/Right move between tabs. Pane focus remains on Alt+PageUp/PageDown.
 Ctrl+W closes the current tab, including both panes that belong to it.

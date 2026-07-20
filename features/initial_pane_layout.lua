@@ -7,8 +7,7 @@ local M = {}
 
 -- Set this to the percentage of the window that the left pane should occupy.
 local left_pane_percentage = 70
-local startup_split_delay_seconds = 0.1
-local pending_startup_pane_ids = {}
+local startup_pane_states = {}
 
 local function validate_left_pane_percentage()
   assert(
@@ -35,21 +34,40 @@ local function spawn_tab_with_layout(window)
   split_pane(left_pane)
 end
 
-local function split_pending_startup_panes()
-  local pane_ids = pending_startup_pane_ids
-  pending_startup_pane_ids = {}
+local function normalize_startup_pane(window)
+  for _, tab in ipairs(window:mux_window():tabs()) do
+    local panes = tab:panes_with_info()
 
-  wezterm.time.call_after(startup_split_delay_seconds, function()
-    for _, pane_id in ipairs(pane_ids) do
-      local left_pane = mux.get_pane(pane_id)
-      local tab = left_pane and left_pane:tab()
+    if #panes == 1 then
+      local left_pane_id = panes[1].pane:pane_id()
 
-      -- Wait for final GUI dimensions, and avoid duplicating a user-created split.
-      if tab and #tab:panes() == 1 then
-        split_pane(left_pane)
+      if startup_pane_states[left_pane_id] == "pending" then
+        startup_pane_states[left_pane_id] = "split"
+        split_pane(panes[1].pane)
+        return
+      end
+    elseif #panes == 2 and panes[1].top == panes[2].top then
+      local left = panes[1].left < panes[2].left and panes[1] or panes[2]
+      local right = panes[1].left < panes[2].left and panes[2] or panes[1]
+      local left_pane_id = left.pane:pane_id()
+
+      if startup_pane_states[left_pane_id] == "split" then
+        local pane_columns = left.width + right.width
+        local target_left_width = math.floor(pane_columns * left_pane_percentage / 100)
+        local adjustment = target_left_width - left.width
+
+        if adjustment > 0 then
+          window:perform_action(act.AdjustPaneSize({ "Right", adjustment }), right.pane)
+        elseif adjustment < 0 then
+          window:perform_action(act.AdjustPaneSize({ "Left", -adjustment }), right.pane)
+        else
+          startup_pane_states[left_pane_id] = nil
+        end
+
+        return
       end
     end
-  end)
+  end
 end
 
 function M.apply(config)
@@ -57,13 +75,15 @@ function M.apply(config)
 
   wezterm.on("gui-startup", function(command)
     local _, left_pane = mux.spawn_window(command or {})
-    table.insert(pending_startup_pane_ids, left_pane:pane_id())
+    startup_pane_states[left_pane:pane_id()] = "pending"
   end)
 
-  wezterm.on("gui-attached", function()
-    if #pending_startup_pane_ids > 0 then
-      split_pending_startup_panes()
-    end
+  wezterm.on("window-resized", function(window)
+    normalize_startup_pane(window)
+  end)
+
+  wezterm.on("update-status", function(window)
+    normalize_startup_pane(window)
   end)
 
   wezterm.on("new-tab-button-click", function(window, _, button)
