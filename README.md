@@ -41,11 +41,11 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 | File | Function added to WezTerm |
 | --- | --- |
 | `wezterm.lua` | Builds the configuration and applies enabled feature modules in their listed order. |
-| `features/agent_tab_state.lua` | Adds colored tab-title indicators for structured agent lifecycle state. |
 | `features/color_scheme.lua` | Selects the `Gruvbox Dark (Gogh)` color scheme. |
 | `features/initial_pane_layout.lua` | Starts the GUI and new tabs with consistently proportioned side-by-side panes and adds Alt+PageUp/PageDown navigation between them. |
 | `features/pane_working_directory_sync.lua` | Keeps the right pane in the left pane's working directory whenever the right pane is at a shell prompt. |
 | `features/tab_navigation.lua` | Adds Alt+Left/Right tab cycling and Alt+1–9 direct tab selection. |
+| `features/tab_titles.lua` | Names tabs after the active pane's working directory, shows the workspace name for a trailing `src`, allows wider repository names, and adds colored agent-state indicators. |
 | `features/two_pane_tab_controls.lua` | Adds Ctrl+W closing of the current tab with both panes. |
 | `bin/wezterm-agent-state` | Publishes an agent state to the current pane using a WezTerm user variable. |
 | `integrations/claude-code-hooks.json` | Provides Claude Code lifecycle hooks for tab state. |
@@ -76,9 +76,15 @@ changes, the right pane follows within about half a second once the right pane
 is back at a Bash, Zsh, Fish, Dash, or POSIX shell prompt. A program running in
 the right pane is not interrupted; synchronization resumes when it exits.
 
-## Agent state in tabs
+## Tab titles and agent state
 
-The tab formatter reads an `agent_state` WezTerm user variable rather than
+Tab titles use the active pane's working-directory basename. A trailing `src`
+directory is treated as a workspace marker, so `/path/to/example_ws/src` is
+shown as `example_ws`. Tabs allow up to 40 cells so typical repository and
+workspace names remain visible; WezTerm may still shorten them when the window
+cannot fit all open tabs.
+
+The same formatter reads an `agent_state` WezTerm user variable rather than
 parsing terminal output. This gives agents and lifecycle hooks a stable,
 tool-independent signaling mechanism:
 
@@ -149,7 +155,7 @@ flag:
 ```lua
 local features = {
   { module = color_scheme, enabled = true },
-  { module = agent_tab_state, enabled = false },
+  { module = tab_titles, enabled = false },
   { module = initial_pane_layout, enabled = true },
   { module = pane_working_directory_sync, enabled = true },
   { module = tab_navigation, enabled = true },

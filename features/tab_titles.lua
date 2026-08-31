@@ -1,4 +1,4 @@
--- Show structured agent lifecycle state in tab titles.
+-- Name tabs after their working directory and show structured agent state.
 local wezterm = require("wezterm")
 
 local M = {}
@@ -10,7 +10,32 @@ local states = {
   attention = { symbol = "!", color = "#fabd2f", priority = 4 },
 }
 
+local function basename(path)
+  local without_trailing_separator = path:gsub("[/\\]+$", "")
+  return without_trailing_separator:match("([^/\\]+)$"), without_trailing_separator
+end
+
+local function title_from_working_directory(pane)
+  local cwd = pane.current_working_dir
+  if not cwd or cwd.scheme ~= "file" then
+    return nil
+  end
+
+  local name, path = basename(cwd.file_path)
+  if name == "src" then
+    -- A trailing src denotes a workspace; display the workspace directory.
+    name = basename(path:sub(1, #path - #name))
+  end
+
+  return name
+end
+
 local function title_for_tab(tab)
+  local cwd_title = title_from_working_directory(tab.active_pane)
+  if cwd_title and #cwd_title > 0 then
+    return cwd_title
+  end
+
   if tab.tab_title and #tab.tab_title > 0 then
     return tab.tab_title
   end
@@ -33,6 +58,9 @@ local function state_for_tab(tab)
 end
 
 function M.apply(config)
+  -- The default limit is 16 cells, which truncates typical repository names.
+  config.tab_max_width = 40
+
   wezterm.on("format-tab-title", function(tab, _, _, effective_config, _, max_width)
     local title = title_for_tab(tab)
     local index = ""
