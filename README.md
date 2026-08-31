@@ -82,7 +82,8 @@ Tab titles use the active pane's working-directory basename. A trailing `src`
 directory is treated as a workspace marker, so `/path/to/example_ws/src` is
 shown as `example_ws`. Tabs allow up to 40 cells so typical repository and
 workspace names remain visible; WezTerm may still shorten them when the window
-cannot fit all open tabs.
+cannot fit all open tabs. While the active pane reports a running agent, its
+live terminal title takes precedence so progress animations remain visible.
 
 The same formatter reads an `agent_state` WezTerm user variable rather than
 parsing terminal output. This gives agents and lifecycle hooks a stable,
