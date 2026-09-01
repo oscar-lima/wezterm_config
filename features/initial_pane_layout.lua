@@ -6,7 +6,7 @@ local mux = wezterm.mux
 local M = {}
 
 -- Set this to the percentage of the window that the left pane should occupy.
-local left_pane_percentage = 70
+local left_pane_percentage = 60
 local startup_pane_states = {}
 
 local function validate_left_pane_percentage()

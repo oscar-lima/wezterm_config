@@ -68,8 +68,9 @@ Ctrl+W closes the current tab, including both panes that belong to it.
 
 Set `left_pane_percentage` near the top of
 `features/initial_pane_layout.lua` to control the initial proportions. For
-example, `50` gives both panes equal space, while `60` gives the left pane 60%
-and the right pane 40%. The value must be greater than `0` and less than `100`.
+example, `50` gives both panes equal space. The configured value is `60`, giving
+the left pane 60% and the right pane 40%. The value must be greater than `0` and
+less than `100`.
 
 The left pane is authoritative for the working directory. If its directory
 changes, the right pane follows within about half a second once the right pane
