@@ -4,34 +4,31 @@ A modular WezTerm configuration with one Lua module per feature.
 
 ## Installation
 
-WezTerm loads its configuration directory from `~/.config/wezterm`. Link the
-whole repository there so that `wezterm.lua` can import the feature modules:
+Run the installer from any checkout location:
 
 ```bash
-rm -f ~/.wezterm.lua
-mkdir -p ~/.config
-
-# Back up an existing config path. This also avoids ln placing the repository
-# symlink inside an existing ~/.config/wezterm directory.
-if [ -e ~/.config/wezterm ] || [ -L ~/.config/wezterm ]; then
-  mv ~/.config/wezterm ~/.config/wezterm.backup-$(date +%Y%m%d-%H%M%S)
-fi
-
-ln -s ~/wezterm_config ~/.config/wezterm
+./install.sh
 ```
 
-The final command assumes this repository is located at `~/wezterm_config`.
-Change the source path if you cloned it elsewhere. For this checkout, use:
+The script copies only the files needed at runtime to
+`$XDG_CONFIG_HOME/wezterm` when `XDG_CONFIG_HOME` is set, or to
+`~/.config/wezterm` otherwise. It installs the helper commands in
+`~/.local/bin`. The installed configuration is self-contained, so the checkout
+can then be moved or removed. Existing configuration and command files are
+renamed with a timestamped `.backup-*` suffix before replacement.
+
+To use non-default destinations, pass either or both options:
 
 ```bash
-ln -s /home/oscar/repos_cloned/wezterm_config ~/.config/wezterm
+./install.sh --config-dir /path/to/wezterm-config --bin-dir /path/to/bin
 ```
 
-Verify that WezTerm can see the entry point and that the configuration directory
-itself, rather than a child within it, is the symlink:
+Make sure `~/.local/bin` (or the selected `--bin-dir`) is on `PATH`. Re-run the
+installer after changing this repository to refresh the installed copy.
+
+Verify that WezTerm can see the entry point and load the configuration:
 
 ```bash
-readlink -f ~/.config/wezterm
 test -f ~/.config/wezterm/wezterm.lua
 wezterm show-keys --lua | grep "mods = 'ALT'"
 ```
@@ -40,6 +37,7 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 
 | File | Function added to WezTerm |
 | --- | --- |
+| `install.sh` | Installs a relocatable runtime copy of the configuration and its helper commands. |
 | `wezterm.lua` | Builds the configuration and applies enabled feature modules in their listed order. |
 | `features/color_scheme.lua` | Selects the `Gruvbox Dark (Gogh)` color scheme. |
 | `features/codex_notifications.lua` | Relays containerized Codex completion events to timed, clickable host notifications. |
@@ -109,20 +107,11 @@ If a tab contains multiple panes, the most urgent pane state is shown. Manually
 pinned pending work has the highest priority, followed by attention, failure,
 running, unread completion, and acknowledged completion.
 
-Make the low-level helper available to agent hooks and install the manual tab
-task wrapper:
-
-```bash
-mkdir -p ~/.local/bin
-ln -sfn ~/.config/wezterm/bin/wezterm-agent-state ~/.local/bin/wezterm-agent-state
-ln -sfn ~/.config/wezterm/bin/wezterm-tab-task ~/.local/bin/wezterm-tab-task
-ln -sfn ~/.config/wezterm/bin/codex-wezterm-notify ~/.local/bin/codex-wezterm-notify
-```
-
-This assumes `~/.local/bin` is on `PATH`. The low-level helper uses Ubuntu's
-standard `base64` utility and writes the OSC control sequence directly to the
-controlling terminal, so hook frameworks may capture their normal stdout
-without breaking the signal.
+The installer makes the low-level helper, manual tab-task wrapper, and Codex
+notification command available to agent hooks in `~/.local/bin`. The low-level
+helper uses Ubuntu's standard `base64` utility and writes the OSC control
+sequence directly to the controlling terminal, so hook frameworks may capture
+their normal stdout without breaking the signal.
 
 Agent integrations use the low-level lifecycle states:
 
