@@ -46,9 +46,10 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 | `features/pane_working_directory_sync.lua` | Keeps the right pane in the left pane's working directory whenever the right pane is at a shell prompt. |
 | `features/scrollbar.lua` | Shows a green scrollbar in the right-side padding of each WezTerm window and retains up to 100,000 lines of scrollback per tab. |
 | `features/tab_navigation.lua` | Adds Alt+Left/Right tab cycling and Alt+1–9 direct tab selection. |
-| `features/tab_titles.lua` | Names tabs after the active pane's working directory, shows the workspace name for a trailing `src`, allows wider repository names, and adds colored agent-state indicators. |
+| `features/tab_titles.lua` | Names tabs after the active pane's working directory, adds colored and focus-aware agent states, and provides attention-tab navigation. |
 | `features/two_pane_tab_controls.lua` | Adds Ctrl+W closing of the current tab with both panes. |
 | `bin/wezterm-agent-state` | Publishes an agent state to the current pane using a WezTerm user variable. |
+| `bin/codex-wezterm-notify` | Shows Codex completion notifications named after the originating tab and focuses its pane when clicked. |
 | `integrations/claude-code-hooks.json` | Provides Claude Code lifecycle hooks for tab state. |
 | `integrations/codex-hooks.toml` | Provides Codex lifecycle hooks for tab state. |
 | `integrations/opencode-agent-state.js` | Provides an opencode plugin for tab state. |
@@ -64,8 +65,10 @@ The initial GUI split is created on the first resize event, with the first
 status update as a fallback. Its measured pane widths are then corrected to the
 configured percentage after startup resizing finishes, matching later tabs.
 
-Alt+Left/Right move between tabs. Pane focus remains on Alt+PageUp/PageDown.
-Ctrl+W closes the current tab, including both panes that belong to it.
+Alt+Left/Right move between tabs. Alt+Shift+A jumps to the next tab that is
+unread, failed, waiting for input, or manually pending. Pane focus remains on
+Alt+PageUp/PageDown. Ctrl+W closes the current tab, including both panes that
+belong to it.
 
 Set `left_pane_percentage` near the top of
 `features/initial_pane_layout.lua` to control the initial proportions. For
@@ -94,13 +97,16 @@ tool-independent signaling mechanism:
 | State | Tab indicator | Intended meaning |
 | --- | --- | --- |
 | `running` | blue `●` | The agent is working. |
-| `completed` | green `✓` | The turn finished successfully. |
+| `completed` | pink `✓`, then green `✓` | The turn finished; pink remains until its tab is viewed. |
 | `failed` | red `✗` | The turn or session failed. |
 | `attention` | yellow `!` | The agent is waiting for input or permission. |
+| `pending` | pink `◆` | A manually pinned task that remains pending even while focused. |
+| `done` | gray `✓` | A task manually marked done. |
 | `clear` | none | Remove the state from the pane. |
 
-If a tab contains multiple panes, the most urgent pane state is shown. The
-priority is attention, failed, running, then completed.
+If a tab contains multiple panes, the most urgent pane state is shown. Manually
+pinned pending work has the highest priority, followed by attention, failure,
+running, unread completion, and acknowledged completion or manual done.
 
 Make the helper available to agent hooks:
 
@@ -117,8 +123,16 @@ the signal. You can test it manually:
 ```bash
 wezterm-agent-state running
 wezterm-agent-state completed
+wezterm-agent-state pending
+wezterm-agent-state done
 wezterm-agent-state clear
 ```
+
+The `pending` and `done` commands provide a manual tab workflow. State is
+published by the current pane and aggregated into its containing tab. Automatic
+completion is pink when it occurs outside the focused tab and becomes green
+when that tab is viewed. Manual `pending` is pinned and is not acknowledged by
+focus; change it explicitly with `done` or `clear`.
 
 ### Agent integrations
 
@@ -127,8 +141,14 @@ wezterm-agent-state clear
   needing attention, normal stops as completed, and API-error stops as failed.
 - Codex: merge `integrations/codex-hooks.toml` into
   `~/.codex/config.toml`. Current hooks cover running, permission requests, and
-  successful turn completion. Use `wezterm-agent-state failed` manually or from
-  an additional local hook when a surrounding workflow detects failure.
+  successful turn completion. The integration replaces the generic completion
+  toast with `bin/codex-wezterm-notify` while retaining built-in approval
+  alerts. Its notification starts with the actual tab name derived from the
+  originating working directory, includes the final assistant message, and
+  focuses the exact originating pane when the notification is clicked.
+  Dismissing it does not change focus or acknowledge the pink tab indicator.
+  Use `wezterm-agent-state failed` manually or from an additional local hook
+  when a surrounding workflow detects failure.
 - opencode: copy `integrations/opencode-agent-state.js` to
   `~/.config/opencode/plugins/`. It uses documented session, permission, and
   tool events to cover all four states.

@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""Show a clickable Codex completion notification for its originating pane."""
+
+import base64
+import json
+import os
+from pathlib import PurePosixPath
+import shutil
+import subprocess
+import sys
+import time
+from urllib.parse import unquote, urlparse
+
+
+def tab_name_from_cwd(cwd: str) -> str:
+    """Match the working-directory naming used by features/tab_titles.lua."""
+    parsed = urlparse(cwd)
+    path = unquote(parsed.path if parsed.scheme else cwd).rstrip("/\\")
+    name = PurePosixPath(path).name
+    if name == "src":
+        name = PurePosixPath(path).parent.name
+    return name or "WezTerm tab"
+
+
+def compact_message(message: str, limit: int = 500) -> str:
+    compact = " ".join(message.split())
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 1].rstrip() + "…"
+
+
+def terminal_path() -> str:
+    """Find the originating terminal, including through detached hook runners."""
+    pid = os.getpid()
+    for _ in range(8):
+        for fd in (0, 1, 2):
+            try:
+                target = os.path.realpath(f"/proc/{pid}/fd/{fd}")
+            except OSError:
+                continue
+            if target.startswith("/dev/pts/") and os.access(target, os.W_OK):
+                return target
+
+        try:
+            with open(f"/proc/{pid}/status", encoding="utf-8") as status:
+                parent_line = next(line for line in status if line.startswith("PPid:"))
+            parent = int(parent_line.split()[1])
+        except (OSError, StopIteration, ValueError):
+            break
+        if parent <= 1 or parent == pid:
+            break
+        pid = parent
+    return ""
+
+
+def request_focus(pane_id: str, tty_path: str, tmux: bool) -> None:
+    if tty_path:
+        token = base64.b64encode(f"{pane_id}-{time.time_ns()}".encode()).decode()
+        sequence = f"\033]1337;SetUserVar=agent_focus_request={token}\007"
+        if tmux:
+            sequence = f"\033Ptmux;\033{sequence}\033\\"
+        try:
+            with open(tty_path, "wb", buffering=0) as terminal:
+                terminal.write(sequence.encode())
+            return
+        except OSError:
+            pass
+
+    # Useful outside the sandboxed desktop runtime, where the CLI may be on PATH.
+    wezterm = shutil.which("wezterm")
+    if wezterm and pane_id:
+        subprocess.run(
+            [wezterm, "cli", "activate-pane", "--pane-id", pane_id],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+
+def show_notification(
+    payload: dict[str, object], pane_id: str, tty_path: str, tmux: bool
+) -> int:
+    notifier = shutil.which("notify-send")
+    if not notifier:
+        return 0
+
+    tab_name = tab_name_from_cwd(str(payload.get("cwd", "")))
+    assistant_message = compact_message(
+        str(payload.get("last-assistant-message", "Turn complete"))
+    )
+    summary = f"{tab_name}: Codex finished"
+
+    result = subprocess.run(
+        [
+            notifier,
+            "--app-name=Codex",
+            "--urgency=normal",
+            "--action=default=Open tab",
+            summary,
+            assistant_message,
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.stdout.strip() == "default":
+        request_focus(pane_id, tty_path, tmux)
+    return 0
+
+
+def launch_worker(payload: dict[str, object], pane_id: str) -> int:
+    subprocess.Popen(
+        [
+            sys.executable,
+            os.path.abspath(__file__),
+            "--worker",
+            json.dumps(payload),
+            pane_id,
+            terminal_path(),
+            "1" if os.environ.get("TMUX") else "0",
+        ],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    return 0
+
+
+def main() -> int:
+    if len(sys.argv) >= 6 and sys.argv[1] == "--worker":
+        return show_notification(
+            json.loads(sys.argv[2]), sys.argv[3], sys.argv[4], sys.argv[5] == "1"
+        )
+
+    if len(sys.argv) != 2:
+        return 0
+
+    try:
+        payload = json.loads(sys.argv[1])
+    except json.JSONDecodeError:
+        return 0
+
+    if payload.get("type") != "agent-turn-complete":
+        return 0
+    return launch_worker(payload, os.environ.get("WEZTERM_PANE", ""))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

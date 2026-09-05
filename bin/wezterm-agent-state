@@ -2,14 +2,14 @@
 
 # Publish agent state to the current WezTerm pane without printing visible text.
 case "${1:-}" in
-  running|completed|failed|attention)
+  running|completed|failed|attention|pending|done)
     state=$1
     ;;
   clear|idle)
     state=
     ;;
   *)
-    echo "usage: wezterm-agent-state {running|completed|failed|attention|clear}" >&2
+    echo "usage: wezterm-agent-state {running|completed|failed|attention|pending|done|clear}" >&2
     exit 2
     ;;
 esac

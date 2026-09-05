@@ -1,4 +1,10 @@
 # Merge these lifecycle hooks into ~/.codex/config.toml.
+notify = ["python3", "/home/oscar/repos_cloned/wezterm_config/bin/codex-wezterm-notify"]
+
+[tui]
+# Keep approval alerts; the external notifier handles turn completion.
+notifications = ["approval-requested"]
+
 [[hooks.UserPromptSubmit]]
 [[hooks.UserPromptSubmit.hooks]]
 type = "command"
