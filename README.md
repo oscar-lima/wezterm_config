@@ -141,14 +141,16 @@ its containing tab.
   needing attention, normal stops as completed, and API-error stops as failed.
 - Codex: merge `integrations/codex-hooks.toml` into
   `~/.codex/config.toml`. Current hooks cover running, permission requests, and
-  successful turn completion. The integration replaces the generic completion
-  toast with `bin/codex-wezterm-notify` while retaining built-in approval
-  alerts. Its notification request crosses Docker isolation through a WezTerm
+  successful turn completion. The integration disables built-in TUI alerts and
+  uses `bin/codex-wezterm-notify` exclusively for completed turns. Its
+  notification request crosses Docker isolation through a WezTerm
   user variable, allowing the host configuration to identify the originating
   pane without exposing the WezTerm control socket to the container. The
-  notification starts with the actual tab name derived from the originating
-  working directory, includes the final assistant message, and focuses the
-  exact originating pane when clicked. The host worker explicitly closes it
+  notification names the completed task from the submitted prompt, falling
+  back to the originating working-directory name when no prompt is available,
+  includes the final assistant message, and focuses the exact originating pane
+  when clicked. Stable turn IDs prevent a completed turn from being announced
+  again when the next task starts. The host worker explicitly closes it
   after 0.5 seconds when the originating tab is active and after 3 seconds
   otherwise, even when the desktop ignores its requested expiration timeout.
   Dismissing it does not change focus or acknowledge the pink tab indicator.

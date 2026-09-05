@@ -2,8 +2,8 @@
 notify = ["codex-wezterm-notify"]
 
 [tui]
-# Keep approval alerts; the external notifier handles turn completion.
-notifications = ["approval-requested"]
+# The external notifier handles completion; suppress all earlier TUI alerts.
+notifications = []
 
 [[hooks.UserPromptSubmit]]
 [[hooks.UserPromptSubmit.hooks]]
