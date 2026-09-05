@@ -44,6 +44,7 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 | `features/color_scheme.lua` | Selects the `Gruvbox Dark (Gogh)` color scheme. |
 | `features/initial_pane_layout.lua` | Starts the GUI and new tabs with consistently proportioned side-by-side panes and adds Alt+PageUp/PageDown navigation between them. |
 | `features/pane_working_directory_sync.lua` | Keeps the right pane in the left pane's working directory whenever the right pane is at a shell prompt. |
+| `features/scrollbar.lua` | Shows a green scrollbar in the right-side padding of each WezTerm window and retains up to 100,000 lines of scrollback per tab. |
 | `features/tab_navigation.lua` | Adds Alt+Left/Right tab cycling and Alt+1–9 direct tab selection. |
 | `features/tab_titles.lua` | Names tabs after the active pane's working directory, shows the workspace name for a trailing `src`, allows wider repository names, and adds colored agent-state indicators. |
 | `features/two_pane_tab_controls.lua` | Adds Ctrl+W closing of the current tab with both panes. |
@@ -160,6 +161,7 @@ local features = {
   { module = tab_titles, enabled = false },
   { module = initial_pane_layout, enabled = true },
   { module = pane_working_directory_sync, enabled = true },
+  { module = scrollbar, enabled = true },
   { module = tab_navigation, enabled = true },
   { module = two_pane_tab_controls, enabled = true },
 }
