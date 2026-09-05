@@ -1,0 +1,19 @@
+#!/bin/sh
+
+# Expose only the states intended for manual tab task tracking.
+case "${1:-}" in
+  pending)
+    agent_state=pending
+    ;;
+  done)
+    # Manual completion removes the task marker rather than impersonating an agent event.
+    agent_state=clear
+    ;;
+  *)
+    echo "usage: wezterm-tab-task {pending|done}" >&2
+    exit 2
+    ;;
+esac
+
+script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec "$script_directory/wezterm-agent-state" "$agent_state"

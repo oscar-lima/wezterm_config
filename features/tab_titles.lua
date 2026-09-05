@@ -5,7 +5,6 @@ local M = {}
 
 local states = {
   completed = { symbol = "✓", color = "#b8bb26", priority = 1 },
-  done = { symbol = "✓", color = "#928374", priority = 1 },
   unread = { symbol = "✓", color = "#d3869b", priority = 2 },
   running = { symbol = "●", color = "#83a598", priority = 3 },
   failed = { symbol = "✗", color = "#fb4934", priority = 4 },

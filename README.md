@@ -48,7 +48,8 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 | `features/tab_navigation.lua` | Adds Alt+Left/Right tab cycling and Alt+1–9 direct tab selection. |
 | `features/tab_titles.lua` | Names tabs after the active pane's working directory, adds colored and focus-aware agent states, and provides attention-tab navigation. |
 | `features/two_pane_tab_controls.lua` | Adds Ctrl+W closing of the current tab with both panes. |
-| `bin/wezterm-agent-state` | Publishes an agent state to the current pane using a WezTerm user variable. |
+| `bin/wezterm-agent-state` | Provides the low-level lifecycle interface used by agent integrations to publish pane state. |
+| `bin/wezterm-tab-task` | Provides the manual `pending` and `done` tab-task interface. |
 | `bin/codex-wezterm-notify` | Shows Codex completion notifications named after the originating tab and focuses its pane when clicked. |
 | `integrations/claude-code-hooks.json` | Provides Claude Code lifecycle hooks for tab state. |
 | `integrations/codex-hooks.toml` | Provides Codex lifecycle hooks for tab state. |
@@ -101,38 +102,46 @@ tool-independent signaling mechanism:
 | `failed` | red `✗` | The turn or session failed. |
 | `attention` | yellow `!` | The agent is waiting for input or permission. |
 | `pending` | pink `◆` | A manually pinned task that remains pending even while focused. |
-| `done` | gray `✓` | A task manually marked done. |
 | `clear` | none | Remove the state from the pane. |
 
 If a tab contains multiple panes, the most urgent pane state is shown. Manually
 pinned pending work has the highest priority, followed by attention, failure,
-running, unread completion, and acknowledged completion or manual done.
+running, unread completion, and acknowledged completion.
 
-Make the helper available to agent hooks:
+Make the low-level helper available to agent hooks and install the manual tab
+task wrapper:
 
 ```bash
 mkdir -p ~/.local/bin
 ln -sfn ~/.config/wezterm/bin/wezterm-agent-state ~/.local/bin/wezterm-agent-state
+ln -sfn ~/.config/wezterm/bin/wezterm-tab-task ~/.local/bin/wezterm-tab-task
 ```
 
-This assumes `~/.local/bin` is on `PATH`. The helper uses Ubuntu's standard
-`base64` utility and writes the OSC control sequence directly to the controlling
-terminal, so hook frameworks may capture their normal stdout without breaking
-the signal. You can test it manually:
+This assumes `~/.local/bin` is on `PATH`. The low-level helper uses Ubuntu's
+standard `base64` utility and writes the OSC control sequence directly to the
+controlling terminal, so hook frameworks may capture their normal stdout
+without breaking the signal.
+
+Agent integrations use the low-level lifecycle states:
 
 ```bash
 wezterm-agent-state running
 wezterm-agent-state completed
-wezterm-agent-state pending
-wezterm-agent-state done
-wezterm-agent-state clear
 ```
 
-The `pending` and `done` commands provide a manual tab workflow. State is
-published by the current pane and aggregated into its containing tab. Automatic
-completion is pink when it occurs outside the focused tab and becomes green
-when that tab is viewed. Manual `pending` is pinned and is not acknowledged by
-focus; change it explicitly with `done` or `clear`.
+For manual task tracking, use only the wrapper:
+
+```bash
+wezterm-tab-task pending
+wezterm-tab-task done
+```
+
+Manual `pending` displays a pinned pink `◆` that is not acknowledged by focus.
+Manual `done` removes that marker. Internally, the wrapper delegates to
+`wezterm-agent-state pending` and `wezterm-agent-state clear`, keeping terminal
+signaling in one implementation without exposing lifecycle terminology in the
+manual workflow. State is published by the current pane and aggregated into
+its containing tab.
 
 ### Agent integrations
 
