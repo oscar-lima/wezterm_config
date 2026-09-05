@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Show a clickable Codex completion notification for its originating pane."""
+"""Relay Codex completion notifications through the originating WezTerm pane."""
 
 import base64
 import json
@@ -10,6 +10,10 @@ import subprocess
 import sys
 import time
 from urllib.parse import unquote, urlparse
+
+
+NOTIFICATION_VARIABLE = "codex_notification_request"
+BACKGROUND_TIMEOUT_MS = 3000
 
 
 def tab_name_from_cwd(cwd: str) -> str:
@@ -30,7 +34,7 @@ def compact_message(message: str, limit: int = 500) -> str:
 
 
 def terminal_path() -> str:
-    """Find the originating terminal, including through detached hook runners."""
+    """Find the terminal even when the hook itself has captured stdio."""
     pid = os.getpid()
     for _ in range(8):
         for fd in (0, 1, 2):
@@ -53,71 +57,121 @@ def terminal_path() -> str:
     return ""
 
 
-def request_focus(pane_id: str, tty_path: str, tmux: bool) -> None:
-    if tty_path:
-        token = base64.b64encode(f"{pane_id}-{time.time_ns()}".encode()).decode()
-        sequence = f"\033]1337;SetUserVar=agent_focus_request={token}\007"
-        if tmux:
-            sequence = f"\033Ptmux;\033{sequence}\033\\"
-        try:
-            with open(tty_path, "wb", buffering=0) as terminal:
-                terminal.write(sequence.encode())
-            return
-        except OSError:
-            pass
+def send_notification_request(payload: dict[str, object]) -> bool:
+    tty_path = terminal_path()
+    if not tty_path:
+        return False
 
-    # Useful outside the sandboxed desktop runtime, where the CLI may be on PATH.
-    wezterm = shutil.which("wezterm")
-    if wezterm and pane_id:
-        subprocess.run(
-            [wezterm, "cli", "activate-pane", "--pane-id", pane_id],
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+    request = {
+        "id": time.time_ns(),
+        "summary": f"{tab_name_from_cwd(str(payload.get('cwd', '')))}: Codex finished",
+        "body": compact_message(
+            str(payload.get("last-assistant-message", "Turn complete"))
+        ),
+    }
+    encoded = base64.b64encode(json.dumps(request).encode()).decode()
+    sequence = f"\033]1337;SetUserVar={NOTIFICATION_VARIABLE}={encoded}\007"
+    if os.environ.get("TMUX"):
+        sequence = f"\033Ptmux;\033{sequence}\033\\"
+
+    try:
+        with open(tty_path, "wb", buffering=0) as terminal:
+            terminal.write(sequence.encode())
+        return True
+    except OSError:
+        return False
 
 
-def show_notification(
-    payload: dict[str, object], pane_id: str, tty_path: str, tmux: bool
+def activate_pane(wezterm: str, pane_id: str) -> None:
+    if not wezterm or not pane_id:
+        return
+    subprocess.run(
+        [wezterm, "cli", "activate-pane", "--pane-id", pane_id],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def close_notification(notification_id: str) -> None:
+    if not notification_id.isdigit() or int(notification_id) <= 0:
+        return
+    gdbus = shutil.which("gdbus")
+    if not gdbus:
+        return
+    subprocess.run(
+        [
+            gdbus,
+            "call",
+            "--session",
+            "--dest",
+            "org.freedesktop.Notifications",
+            "--object-path",
+            "/org/freedesktop/Notifications",
+            "--method",
+            "org.freedesktop.Notifications.CloseNotification",
+            notification_id,
+        ],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def show_host_notification(
+    summary: str, body: str, pane_id: str, timeout_ms: int, wezterm: str
 ) -> int:
     notifier = shutil.which("notify-send")
     if not notifier:
         return 0
 
-    tab_name = tab_name_from_cwd(str(payload.get("cwd", "")))
-    assistant_message = compact_message(
-        str(payload.get("last-assistant-message", "Turn complete"))
-    )
-    summary = f"{tab_name}: Codex finished"
-
-    result = subprocess.run(
+    process = subprocess.Popen(
         [
             notifier,
+            "--print-id",
             "--app-name=Codex",
             "--urgency=normal",
+            "--expire-time=0",
             "--action=default=Open tab",
             summary,
-            assistant_message,
+            body,
         ],
-        check=False,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
         text=True,
     )
-    if result.stdout.strip() == "default":
-        request_focus(pane_id, tty_path, tmux)
+    if process.stdout is None:
+        return 0
+
+    # notify-send flushes the ID before waiting for an action.
+    notification_id = process.stdout.readline().strip()
+    try:
+        output, _ = process.communicate(timeout=timeout_ms / 1000)
+    except subprocess.TimeoutExpired:
+        close_notification(notification_id)
+        try:
+            process.communicate(timeout=1)
+        except subprocess.TimeoutExpired:
+            process.terminate()
+            process.wait()
+        return 0
+
+    if "default" in output.splitlines():
+        activate_pane(wezterm, pane_id)
     return 0
 
 
-def launch_worker(payload: dict[str, object], pane_id: str) -> int:
+def launch_fallback(payload: dict[str, object]) -> int:
     subprocess.Popen(
         [
             sys.executable,
             os.path.abspath(__file__),
-            "--worker",
-            json.dumps(payload),
-            pane_id,
-            terminal_path(),
-            "1" if os.environ.get("TMUX") else "0",
+            "--host-worker",
+            f"{tab_name_from_cwd(str(payload.get('cwd', '')))}: Codex finished",
+            compact_message(str(payload.get("last-assistant-message", "Turn complete"))),
+            os.environ.get("WEZTERM_PANE", ""),
+            str(BACKGROUND_TIMEOUT_MS),
+            os.environ.get("WEZTERM_EXECUTABLE", ""),
         ],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -128,22 +182,28 @@ def launch_worker(payload: dict[str, object], pane_id: str) -> int:
 
 
 def main() -> int:
-    if len(sys.argv) >= 6 and sys.argv[1] == "--worker":
-        return show_notification(
-            json.loads(sys.argv[2]), sys.argv[3], sys.argv[4], sys.argv[5] == "1"
+    if len(sys.argv) == 7 and sys.argv[1] == "--host-worker":
+        try:
+            timeout_ms = int(sys.argv[5])
+        except ValueError:
+            timeout_ms = BACKGROUND_TIMEOUT_MS
+        timeout_ms = max(100, min(timeout_ms, 60000))
+        return show_host_notification(
+            sys.argv[2], sys.argv[3], sys.argv[4], timeout_ms, sys.argv[6]
         )
 
     if len(sys.argv) != 2:
         return 0
-
     try:
         payload = json.loads(sys.argv[1])
     except json.JSONDecodeError:
         return 0
-
     if payload.get("type") != "agent-turn-complete":
         return 0
-    return launch_worker(payload, os.environ.get("WEZTERM_PANE", ""))
+
+    if send_notification_request(payload):
+        return 0
+    return launch_fallback(payload)
 
 
 if __name__ == "__main__":

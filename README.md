@@ -42,6 +42,7 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 | --- | --- |
 | `wezterm.lua` | Builds the configuration and applies enabled feature modules in their listed order. |
 | `features/color_scheme.lua` | Selects the `Gruvbox Dark (Gogh)` color scheme. |
+| `features/codex_notifications.lua` | Relays containerized Codex completion events to timed, clickable host notifications. |
 | `features/initial_pane_layout.lua` | Starts the GUI and new tabs with consistently proportioned side-by-side panes and adds Alt+PageUp/PageDown navigation between them. |
 | `features/pane_working_directory_sync.lua` | Keeps the right pane in the left pane's working directory whenever the right pane is at a shell prompt. |
 | `features/scrollbar.lua` | Shows a green scrollbar in the right-side padding of each WezTerm window and retains up to 100,000 lines of scrollback per tab. |
@@ -50,7 +51,7 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 | `features/two_pane_tab_controls.lua` | Adds Ctrl+W closing of the current tab with both panes. |
 | `bin/wezterm-agent-state` | Provides the low-level lifecycle interface used by agent integrations to publish pane state. |
 | `bin/wezterm-tab-task` | Provides the manual `pending` and `done` tab-task interface. |
-| `bin/codex-wezterm-notify` | Shows Codex completion notifications named after the originating tab and focuses its pane when clicked. |
+| `bin/codex-wezterm-notify` | Sends Codex completion events through the originating terminal and runs the host notification worker. |
 | `integrations/claude-code-hooks.json` | Provides Claude Code lifecycle hooks for tab state. |
 | `integrations/codex-hooks.toml` | Provides Codex lifecycle hooks for tab state. |
 | `integrations/opencode-agent-state.js` | Provides an opencode plugin for tab state. |
@@ -115,6 +116,7 @@ task wrapper:
 mkdir -p ~/.local/bin
 ln -sfn ~/.config/wezterm/bin/wezterm-agent-state ~/.local/bin/wezterm-agent-state
 ln -sfn ~/.config/wezterm/bin/wezterm-tab-task ~/.local/bin/wezterm-tab-task
+ln -sfn ~/.config/wezterm/bin/codex-wezterm-notify ~/.local/bin/codex-wezterm-notify
 ```
 
 This assumes `~/.local/bin` is on `PATH`. The low-level helper uses Ubuntu's
@@ -152,10 +154,17 @@ its containing tab.
   `~/.codex/config.toml`. Current hooks cover running, permission requests, and
   successful turn completion. The integration replaces the generic completion
   toast with `bin/codex-wezterm-notify` while retaining built-in approval
-  alerts. Its notification starts with the actual tab name derived from the
-  originating working directory, includes the final assistant message, and
-  focuses the exact originating pane when the notification is clicked.
+  alerts. Its notification request crosses Docker isolation through a WezTerm
+  user variable, allowing the host configuration to identify the originating
+  pane without exposing the WezTerm control socket to the container. The
+  notification starts with the actual tab name derived from the originating
+  working directory, includes the final assistant message, and focuses the
+  exact originating pane when clicked. The host worker explicitly closes it
+  after 0.5 seconds when the originating tab is active and after 3 seconds
+  otherwise, even when the desktop ignores its requested expiration timeout.
   Dismissing it does not change focus or acknowledge the pink tab indicator.
+  The `codex-wezterm-notify` command must be available inside the environment
+  where Codex runs; containerized Codex images should install their own copy.
   Use `wezterm-agent-state failed` manually or from an additional local hook
   when a surrounding workflow detects failure.
 - opencode: copy `integrations/opencode-agent-state.js` to
@@ -187,6 +196,7 @@ flag:
 ```lua
 local features = {
   { module = color_scheme, enabled = true },
+  { module = codex_notifications, enabled = true },
   { module = tab_titles, enabled = false },
   { module = initial_pane_layout, enabled = true },
   { module = pane_working_directory_sync, enabled = true },
