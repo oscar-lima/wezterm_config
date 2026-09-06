@@ -149,8 +149,16 @@ its containing tab.
   notification names the completed task from the submitted prompt, falling
   back to the originating working-directory name when no prompt is available,
   includes the final assistant message, and focuses the exact originating pane
-  when clicked. Stable turn IDs prevent a completed turn from being announced
-  again when the next task starts. The host worker explicitly closes it
+  when clicked. Stable turn IDs suppress duplicate delivery, and the relay
+  clears each request from the pane after delivery. Codex also invokes the
+  legacy notifier when its hidden title-generation thread finishes near task
+  startup. That thread has its own IDs, so duplicate filtering cannot suppress
+  it. The relay recognizes Codex's internal title/rename prompt envelope and
+  discards those events before terminal delivery or the desktop fallback.
+  Ordinary user tasks that request titles or return JSON still notify. This
+  compatibility filter is needed because the legacy notification payload does
+  not include the thread's internal/ephemeral classification.
+  The host worker explicitly closes the notification
   after 0.5 seconds when the originating tab is active and after 3 seconds
   otherwise, even when the desktop ignores its requested expiration timeout.
   Dismissing it does not change focus or acknowledge the pink tab indicator.
@@ -161,6 +169,18 @@ its containing tab.
 - opencode: copy `integrations/opencode-agent-state.js` to
   `~/.config/opencode/plugins/`. It uses documented session, permission, and
   tool events to cover all four states.
+
+Run notification regression tests without sending desktop alerts:
+
+```bash
+python3 -B -m unittest discover -s tests -v
+```
+
+The tests cover the hidden title completion followed by the real task completion
+on both delivery routes, ordinary title/JSON tasks, and terminal request clearing.
+After a relay change, rerun `./install.sh`. For `codex-isolated`, also rebuild
+using its repository's `./install.sh` and start a new isolated session; existing
+containers retain the old image-installed relay.
 
 The integration files expect `wezterm-agent-state` on `PATH`. They are examples
 to merge with existing settings rather than replacements for those files.

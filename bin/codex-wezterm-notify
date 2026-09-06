@@ -43,6 +43,38 @@ def task_name(payload: dict[str, object]) -> str:
     return tab_name_from_cwd(str(payload.get("cwd", "")))
 
 
+def is_internal_title_request(payload: dict[str, object]) -> bool:
+    """Recognize Codex's hidden title turns, which also invoke legacy notify.
+
+    The legacy payload has no ephemeral/thread-source field. Match the internal
+    prompt envelope, not the response (a real task can legitimately return JSON
+    with a title), and do not confuse quoted instructions with that envelope.
+    """
+    messages = payload.get("input-messages")
+    if not isinstance(messages, list):
+        return False
+    for message in messages:
+        if not isinstance(message, str):
+            continue
+        if not message.startswith(
+            "Generate a concise, single-line task title of at most "
+        ):
+            continue
+        instructions, separator, context = message.partition("\n\n")
+        if not separator:
+            continue
+        if instructions.endswith("Do not answer the request."):
+            if context.startswith("User prompt:\n"):
+                return True
+        if instructions.endswith(
+            "Do not answer the request.\n"
+            "Prioritize the current task and latest substantive user request."
+        ):
+            if context.startswith("Recent conversation messages:\n"):
+                return True
+    return False
+
+
 def event_id(payload: dict[str, object]) -> str:
     """Return a stable identity so WezTerm can ignore replayed turn events."""
     thread_id = payload.get("thread-id")
@@ -51,6 +83,15 @@ def event_id(payload: dict[str, object]) -> str:
         if thread_id and turn_id:
             return f"{thread_id}:{turn_id}"
     return str(time.time_ns())
+
+
+def user_var_sequence(value: str) -> str:
+    """Encode a WezTerm user variable update for the current terminal."""
+    encoded = base64.b64encode(value.encode()).decode()
+    sequence = f"\033]1337;SetUserVar={NOTIFICATION_VARIABLE}={encoded}\007"
+    if os.environ.get("TMUX"):
+        return f"\033Ptmux;\033{sequence}\033\\"
+    return sequence
 
 
 def terminal_path() -> str:
@@ -89,10 +130,10 @@ def send_notification_request(payload: dict[str, object]) -> bool:
             str(payload.get("last-assistant-message", "Turn complete"))
         ),
     }
-    encoded = base64.b64encode(json.dumps(request).encode()).decode()
-    sequence = f"\033]1337;SetUserVar={NOTIFICATION_VARIABLE}={encoded}\007"
-    if os.environ.get("TMUX"):
-        sequence = f"\033Ptmux;\033{sequence}\033\\"
+    # Clear the pane variable immediately after publishing the request. WezTerm
+    # still delivers both ordered changes, while future pane-state updates can
+    # no longer replay the previous turn's completion request.
+    sequence = user_var_sequence(json.dumps(request)) + user_var_sequence("")
 
     try:
         with open(tty_path, "wb", buffering=0) as terminal:
@@ -218,7 +259,9 @@ def main() -> int:
         payload = json.loads(sys.argv[1])
     except json.JSONDecodeError:
         return 0
-    if payload.get("type") != "agent-turn-complete":
+    if not isinstance(payload, dict) or payload.get("type") != "agent-turn-complete":
+        return 0
+    if is_internal_title_request(payload):
         return 0
 
     if send_notification_request(payload):
