@@ -149,8 +149,9 @@ its containing tab.
   notification names the completed task from the submitted prompt, falling
   back to the originating working-directory name when no prompt is available,
   includes the final assistant message, and focuses the exact originating pane
-  when clicked. Stable turn IDs suppress duplicate delivery, and the relay
-  clears each request from the pane after delivery. Codex also invokes the
+  when clicked. Stable turn IDs suppress exact event replays, while a five-minute
+  content fingerprint suppresses the same logical completion when Codex assigns
+  it new IDs. The relay clears each request from the pane after delivery. Codex also invokes the
   legacy notifier when its hidden title-generation thread finishes near task
   startup. That thread has its own IDs, so duplicate filtering cannot suppress
   it. The relay recognizes Codex's internal title/rename prompt envelope and
