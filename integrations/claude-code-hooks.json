@@ -1,19 +1,25 @@
 {
   "hooks": {
     "UserPromptSubmit": [
-      { "hooks": [{ "type": "command", "command": "wezterm-agent-state", "args": ["running"] }] }
+      { "hooks": [{ "type": "command", "command": "wezterm-agent-state running" }] }
     ],
     "PostToolUse": [
-      { "hooks": [{ "type": "command", "command": "wezterm-agent-state", "args": ["running"] }] }
+      { "hooks": [{ "type": "command", "command": "wezterm-agent-state running" }] }
     ],
     "PermissionRequest": [
-      { "hooks": [{ "type": "command", "command": "wezterm-agent-state", "args": ["attention"] }] }
+      { "hooks": [{ "type": "command", "command": "wezterm-agent-state attention" }] }
+    ],
+    "Notification": [
+      {
+        "matcher": "permission_prompt|agent_needs_input|elicitation_dialog|elicitation_url_dialog",
+        "hooks": [{ "type": "command", "command": "wezterm-agent-state attention" }]
+      }
     ],
     "Stop": [
-      { "hooks": [{ "type": "command", "command": "wezterm-agent-state", "args": ["completed"] }] }
+      { "hooks": [{ "type": "command", "command": "wezterm-agent-state completed" }] }
     ],
     "StopFailure": [
-      { "hooks": [{ "type": "command", "command": "wezterm-agent-state", "args": ["failed"] }] }
+      { "hooks": [{ "type": "command", "command": "wezterm-agent-state failed" }] }
     ]
   }
 }

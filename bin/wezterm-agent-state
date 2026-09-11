@@ -19,21 +19,50 @@ if [ -z "${WEZTERM_PANE:-}" ]; then
   exit 0
 fi
 
-# Some hook runners detach from the terminal even if they inherit WEZTERM_PANE.
-if ! (: > /dev/tty) 2>/dev/null; then
-  exit 0
-fi
-
 if ! command -v base64 >/dev/null 2>&1; then
   echo "wezterm-agent-state: base64 is required" >&2
   exit 1
 fi
 
+# Locate the pane's terminal. /dev/tty covers hooks that keep the controlling
+# terminal (Codex, opencode). Claude Code runs hooks in a new session, so
+# /dev/tty is unavailable there; fall back to a pseudo-terminal still open on
+# this process or one of its ancestors, which is the agent's own terminal.
+terminal_path() {
+  if (: > /dev/tty) 2>/dev/null; then
+    echo /dev/tty
+    return 0
+  fi
+
+  pid=$$
+  depth=0
+  while [ "$depth" -lt 8 ] && [ "$pid" -gt 1 ]; do
+    for fd in 0 1 2; do
+      target=$(readlink "/proc/$pid/fd/$fd" 2>/dev/null) || continue
+      case "$target" in
+        /dev/pts/*)
+          if [ -w "$target" ]; then
+            echo "$target"
+            return 0
+          fi
+          ;;
+      esac
+    done
+    pid=$(awk '/^PPid:/ { print $2 }' "/proc/$pid/status" 2>/dev/null) || break
+    [ -n "$pid" ] || break
+    depth=$((depth + 1))
+  done
+
+  return 1
+}
+
+terminal=$(terminal_path) || exit 0
+
 encoded=$(printf %s "$state" | base64 | tr -d '\n')
 
 if [ -n "${TMUX:-}" ]; then
   # tmux requires allow-passthrough for terminal-specific OSC sequences.
-  printf '\033Ptmux;\033\033]1337;SetUserVar=agent_state=%s\007\033\\' "$encoded" > /dev/tty
+  printf '\033Ptmux;\033\033]1337;SetUserVar=agent_state=%s\007\033\\' "$encoded" > "$terminal"
 else
-  printf '\033]1337;SetUserVar=agent_state=%s\007' "$encoded" > /dev/tty
+  printf '\033]1337;SetUserVar=agent_state=%s\007' "$encoded" > "$terminal"
 fi

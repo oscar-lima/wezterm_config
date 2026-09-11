@@ -124,7 +124,11 @@ The installer makes the low-level helper, manual tab-task wrapper, and Codex
 notification command available to agent hooks in `~/.local/bin`. The low-level
 helper uses Ubuntu's standard `base64` utility and writes the OSC control
 sequence directly to the controlling terminal, so hook frameworks may capture
-their normal stdout without breaking the signal.
+their normal stdout without breaking the signal. When a hook runner starts its
+commands in a new session without a controlling terminal, as Claude Code does,
+the helper instead writes to the pseudo-terminal still open on one of its
+ancestor processes, which is the agent's own WezTerm pane. Outside WezTerm, or
+when no terminal can be found, it exits silently.
 
 Agent integrations use the low-level lifecycle states:
 
@@ -150,8 +154,14 @@ its containing tab.
 ### Agent integrations
 
 - Claude Code: merge `integrations/claude-code-hooks.json` into
-  `~/.claude/settings.json`. It marks prompts as running, permission requests as
-  needing attention, normal stops as completed, and API-error stops as failed.
+  `~/.claude/settings.json`. It marks submitted prompts and completed tool
+  calls as running, permission requests and questions to the user as needing
+  attention, normal stops as completed, and API-error stops as failed. The
+  attention state is published from both the `PermissionRequest` hook and the
+  `Notification` hook (`permission_prompt`, `agent_needs_input`, and
+  elicitation dialogs), so it also covers `AskUserQuestion` prompts. Hook
+  entries for events already present in `settings.json` must be appended to
+  that event's list rather than replacing it.
 - Codex: merge `integrations/codex-hooks.toml` into
   `~/.codex/config.toml`. Current hooks cover running, permission requests, and
   successful turn completion. The integration disables Codex's built-in
@@ -194,6 +204,8 @@ python3 -B -m unittest discover -s tests -v
 
 The tests cover the hidden title completion followed by the real task completion
 on both delivery routes, ordinary title/JSON tasks, and terminal request clearing.
+They also run `wezterm-agent-state` without a controlling terminal, as Claude
+Code hooks do, and check that the state reaches the ancestor's terminal.
 After a relay change, rerun `./install.sh`. For `codex-isolated`, also rebuild
 using its repository's `./install.sh` and start a new isolated session; existing
 containers retain the old image-installed relay.
