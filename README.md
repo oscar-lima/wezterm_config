@@ -39,7 +39,7 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 | --- | --- |
 | `install.sh` | Installs a relocatable runtime copy of the configuration and its helper commands. |
 | `wezterm.lua` | Builds the configuration and applies enabled feature modules in their listed order. |
-| `features/window_backend.lua` | Runs WezTerm through its native Wayland backend to avoid XWayland redraw artifacts. |
+| `features/window_backend.lua` | Runs WezTerm through XWayland so window-edge UI such as the scrollbar renders reliably on Ubuntu Wayland. |
 | `features/color_scheme.lua` | Selects the `Gruvbox Dark (Gogh)` color scheme. |
 | `features/text_cursor.lua` | Uses a steady bar cursor and disables cursor blinking to reduce distracting redraws. |
 | `features/codex_notifications.lua` | Relays containerized Codex completion events to timed, clickable host notifications. |
@@ -58,8 +58,9 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 
 ## Window backend
 
-WezTerm uses its native Wayland backend so its rendering path matches the
-desktop session and avoids XWayland redraw artifacts.
+WezTerm uses XWayland because its native Wayland backend does not reliably
+render window-edge UI such as the scrollbar on Ubuntu. This affects only
+WezTerm; the desktop session and other applications continue to use Wayland.
 
 ## Text cursor
 
