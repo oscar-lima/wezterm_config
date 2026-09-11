@@ -154,8 +154,10 @@ its containing tab.
   needing attention, normal stops as completed, and API-error stops as failed.
 - Codex: merge `integrations/codex-hooks.toml` into
   `~/.codex/config.toml`. Current hooks cover running, permission requests, and
-  successful turn completion. The integration disables built-in TUI alerts and
-  uses `bin/codex-wezterm-notify` exclusively for completed turns. Its
+  successful turn completion. The integration disables Codex's built-in
+  terminal-title updates and TUI alerts, preserving the working-directory title
+  rendered by WezTerm and using `bin/codex-wezterm-notify` exclusively for
+  completed turns. Its
   notification request crosses Docker isolation through a WezTerm
   user variable, allowing the host configuration to identify the originating
   pane without exposing the WezTerm control socket to the container. The

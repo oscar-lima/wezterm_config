@@ -4,6 +4,8 @@ notify = ["codex-wezterm-notify"]
 [tui]
 # The external notifier handles completion; suppress all earlier TUI alerts.
 notifications = []
+# Keep Codex from overwriting WezTerm's working-directory tab titles.
+terminal_title = []
 
 [[hooks.UserPromptSubmit]]
 [[hooks.UserPromptSubmit.hooks]]
