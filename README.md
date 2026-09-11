@@ -39,8 +39,9 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 | --- | --- |
 | `install.sh` | Installs a relocatable runtime copy of the configuration and its helper commands. |
 | `wezterm.lua` | Builds the configuration and applies enabled feature modules in their listed order. |
-| `features/window_backend.lua` | Runs WezTerm through XWayland so native title-bar actions such as double-click maximize remain available. |
+| `features/window_backend.lua` | Runs WezTerm through its native Wayland backend to avoid XWayland redraw artifacts. |
 | `features/color_scheme.lua` | Selects the `Gruvbox Dark (Gogh)` color scheme. |
+| `features/text_cursor.lua` | Uses a steady bar cursor and disables cursor blinking to reduce distracting redraws. |
 | `features/codex_notifications.lua` | Relays containerized Codex completion events to timed, clickable host notifications. |
 | `features/initial_pane_layout.lua` | Starts the GUI and new tabs with consistently proportioned side-by-side panes and adds Alt+PageUp/PageDown navigation between them. |
 | `features/pane_working_directory_sync.lua` | Keeps the right pane in the left pane's working directory whenever the right pane is at a shell prompt. |
@@ -57,9 +58,13 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 
 ## Window backend
 
-WezTerm uses XWayland because its native Wayland decoration path does not
-reliably handle title-bar double-click maximize. This affects only WezTerm; the
-desktop session and other applications continue to use Wayland normally.
+WezTerm uses its native Wayland backend so its rendering path matches the
+desktop session and avoids XWayland redraw artifacts.
+
+## Text cursor
+
+The text cursor is a steady bar rather than a blinking block. Cursor blinking
+is disabled globally, including when an application requests a blinking cursor.
 
 ## Initial pane layout
 
