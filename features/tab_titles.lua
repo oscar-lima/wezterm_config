@@ -37,12 +37,6 @@ end
 
 local function title_for_tab(tab)
   local active_pane = tab.active_pane
-  local active_state = (active_pane.user_vars or {}).agent_state
-
-  -- Running agents may animate the terminal title to show live progress.
-  if active_state == "running" and active_pane.title and #active_pane.title > 0 then
-    return active_pane.title
-  end
 
   local cwd_title = title_from_working_directory(active_pane)
   if cwd_title and #cwd_title > 0 then
