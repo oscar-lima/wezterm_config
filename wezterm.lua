@@ -8,8 +8,10 @@ local scrollbar = require("features.scrollbar")
 local tab_navigation = require("features.tab_navigation")
 local tab_titles = require("features.tab_titles")
 local two_pane_tab_controls = require("features.two_pane_tab_controls")
+local window_backend = require("features.window_backend")
 
 local features = {
+  { module = window_backend, enabled = true },
   { module = color_scheme, enabled = true },
   { module = codex_notifications, enabled = true },
   { module = tab_titles, enabled = true },

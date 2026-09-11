@@ -39,6 +39,7 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 | --- | --- |
 | `install.sh` | Installs a relocatable runtime copy of the configuration and its helper commands. |
 | `wezterm.lua` | Builds the configuration and applies enabled feature modules in their listed order. |
+| `features/window_backend.lua` | Runs WezTerm through XWayland so native title-bar actions such as double-click maximize remain available. |
 | `features/color_scheme.lua` | Selects the `Gruvbox Dark (Gogh)` color scheme. |
 | `features/codex_notifications.lua` | Relays containerized Codex completion events to timed, clickable host notifications. |
 | `features/initial_pane_layout.lua` | Starts the GUI and new tabs with consistently proportioned side-by-side panes and adds Alt+PageUp/PageDown navigation between them. |
@@ -53,6 +54,12 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 | `integrations/claude-code-hooks.json` | Provides Claude Code lifecycle hooks for tab state. |
 | `integrations/codex-hooks.toml` | Provides Codex lifecycle hooks for tab state. |
 | `integrations/opencode-agent-state.js` | Provides an opencode plugin for tab state. |
+
+## Window backend
+
+WezTerm uses XWayland because its native Wayland decoration path does not
+reliably handle title-bar double-click maximize. This affects only WezTerm; the
+desktop session and other applications continue to use Wayland normally.
 
 ## Initial pane layout
 
@@ -207,6 +214,7 @@ flag:
 
 ```lua
 local features = {
+  { module = window_backend, enabled = true },
   { module = color_scheme, enabled = true },
   { module = codex_notifications, enabled = true },
   { module = tab_titles, enabled = false },
