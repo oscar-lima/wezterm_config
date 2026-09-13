@@ -47,8 +47,8 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 | --- | --- |
 | `install.sh` | Installs a relocatable runtime copy, helper commands, and a Linux desktop launcher that starts a fresh GUI with the installed configuration. |
 | `wezterm.lua` | Builds the configuration and applies enabled feature modules in their listed order. |
-| `features/window_backend.lua` | Runs WezTerm through XWayland so window-edge UI such as the scrollbar renders reliably on Ubuntu Wayland. |
-| `features/rendering_backend.lua` | Selects WebGPU as a workaround to try for text redraw flicker with the default OpenGL renderer under XWayland. |
+| `features/window_backend.lua` | Enables native Wayland to avoid the terminal-app text redraw flicker reproduced under XWayland. |
+| `features/rendering_backend.lua` | Selects WebGPU, the renderer tested with native Wayland. |
 | `features/color_scheme.lua` | Selects the `Gruvbox Dark (Gogh)` color scheme. |
 | `features/text_cursor.lua` | Uses a steady bar cursor and disables cursor blinking to reduce distracting redraws. |
 | `features/codex_notifications.lua` | Relays containerized Codex completion events to timed, clickable host notifications. |
@@ -67,21 +67,24 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 
 ## Window backend
 
-WezTerm uses XWayland because its native Wayland backend does not reliably
-render window-edge UI such as the scrollbar on Ubuntu. This affects only
-WezTerm; the desktop session and other applications continue to use Wayland.
+WezTerm enables its native Wayland backend (`enable_wayland = true`). On the
+affected NVIDIA/GNOME desktop, text disappeared and reappeared while typing in
+terminal applications under XWayland. Running the same affected application
+with native Wayland stopped the observed flicker, and the green scrollbar was
+confirmed usable in that same window. Plain shell typing was stable in both
+cases.
+
+The earlier native-Wayland fix (`3d5cf4d`) was undone by the scrollbar workaround
+(`5233ad6`). Keep native Wayland enabled and address any scrollbar problems in
+`features/scrollbar.lua` separately, so that a scrollbar change does not restore
+the flickering backend. See WezTerm's
+[Wayland option documentation](https://wezterm.org/config/lua/config/enable_wayland.html).
 
 ## Rendering backend and typing flicker
 
-The renderer is set to `WebGpu`, independently of the XWayland window backend.
-This tries a different GPU rendering path for the symptom where recently typed
-words disappear and reappear. It keeps the existing scrollbar workaround, but
-needs a visual typing test on the affected desktop to confirm whether it helps.
+The renderer remains `WebGpu`, as used in the successful native-Wayland test.
+WebGPU alone did not resolve the flicker while XWayland remained enabled.
 See WezTerm's [renderer documentation](https://wezterm.org/config/lua/config/front_end.html).
-
-The earlier flicker fix (`3d5cf4d`) enabled native Wayland and disabled cursor
-blinking. The scrollbar fix (`5233ad6`) subsequently restored XWayland, undoing
-the display-backend portion of that fix. Cursor blinking remains disabled.
 
 From this checkout, test the configuration in a separate GUI process before
 installing it:
@@ -96,17 +99,18 @@ WezTerm from the app menu or dock. The installed launcher uses the same explicit
 configuration and fresh-process options; existing windows keep their running
 work. Renderer changes need a new process; reloading alone is insufficient.
 
-The installed copy was also confirmed flicker-free when launched with:
+To test the installed configuration directly:
 
 ```bash
 wezterm --config-file "$HOME/.config/wezterm/wezterm.lua" start --always-new-process
 ```
 
-The system launcher (`wezterm start --cwd .`) still exhibited flicker with the
-same installed Lua files. The user launcher preserves the working launch
-options; the precise cause of the different rendering behavior is unconfirmed.
-Custom keyboard shortcuts that directly run `wezterm start` should likewise use
-the explicit installed config path and `--always-new-process`.
+The explicit config path and fresh-process launcher ensure startup uses the
+installed settings, but did not by themselves eliminate flicker. Validate in
+the affected terminal application while it produces output, not just at a
+plain shell prompt. Existing XWayland windows need to be replaced with new
+windows when their running work permits; config reload cannot change their
+display backend.
 
 If WebGPU fails to start or makes rendering worse, compare the same checkout
 using the original renderer without editing or installing anything:
