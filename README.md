@@ -40,6 +40,7 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 | `install.sh` | Installs a relocatable runtime copy of the configuration and its helper commands. |
 | `wezterm.lua` | Builds the configuration and applies enabled feature modules in their listed order. |
 | `features/window_backend.lua` | Runs WezTerm through XWayland so window-edge UI such as the scrollbar renders reliably on Ubuntu Wayland. |
+| `features/rendering_backend.lua` | Selects WebGPU as a workaround to try for text redraw flicker with the default OpenGL renderer under XWayland. |
 | `features/color_scheme.lua` | Selects the `Gruvbox Dark (Gogh)` color scheme. |
 | `features/text_cursor.lua` | Uses a steady bar cursor and disables cursor blinking to reduce distracting redraws. |
 | `features/codex_notifications.lua` | Relays containerized Codex completion events to timed, clickable host notifications. |
@@ -61,6 +62,37 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 WezTerm uses XWayland because its native Wayland backend does not reliably
 render window-edge UI such as the scrollbar on Ubuntu. This affects only
 WezTerm; the desktop session and other applications continue to use Wayland.
+
+## Rendering backend and typing flicker
+
+The renderer is set to `WebGpu`, independently of the XWayland window backend.
+This tries a different GPU rendering path for the symptom where recently typed
+words disappear and reappear. It keeps the existing scrollbar workaround, but
+needs a visual typing test on the affected desktop to confirm whether it helps.
+See WezTerm's [renderer documentation](https://wezterm.org/config/lua/config/front_end.html).
+
+The earlier flicker fix (`3d5cf4d`) enabled native Wayland and disabled cursor
+blinking. The scrollbar fix (`5233ad6`) subsequently restored XWayland, undoing
+the display-backend portion of that fix. Cursor blinking remains disabled.
+
+From this checkout, test the configuration in a separate GUI process before
+installing it:
+
+```bash
+wezterm --config-file "$PWD/wezterm.lua" start --always-new-process
+```
+
+Check typing in both the shell and the application that flickered, and check
+that the scrollbar still renders. If it works, run `./install.sh`, then fully
+quit and reopen WezTerm when your running work permits. Renderer changes need
+a new process; reloading the configuration alone is insufficient.
+
+If WebGPU fails to start or makes rendering worse, compare the same checkout
+using the original renderer without editing or installing anything:
+
+```bash
+wezterm --config-file "$PWD/wezterm.lua" --config 'front_end="OpenGL"' start --always-new-process
+```
 
 ## Text cursor
 
@@ -236,6 +268,7 @@ flag:
 ```lua
 local features = {
   { module = window_backend, enabled = true },
+  { module = rendering_backend, enabled = true },
   { module = color_scheme, enabled = true },
   { module = codex_notifications, enabled = true },
   { module = tab_titles, enabled = false },
