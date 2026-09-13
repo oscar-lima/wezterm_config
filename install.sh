@@ -9,6 +9,8 @@ usage: ./install.sh [--config-dir DIR] [--bin-dir DIR]
 
 Copies the WezTerm configuration to ~/.config/wezterm (or $XDG_CONFIG_HOME/wezterm)
 and its helper commands to ~/.local/bin by default.
+On Linux, also installs a user desktop launcher under $XDG_DATA_HOME/applications
+(or ~/.local/share/applications) that starts a fresh GUI with the installed config.
 EOF
 }
 
@@ -86,6 +88,32 @@ done
 # ~/.wezterm.lua takes precedence on some WezTerm installations.
 if [ "$config_dir" = "$default_config_dir" ]; then
   backup_existing "$HOME/.wezterm.lua"
+fi
+
+if [ "$(uname -s)" = Linux ]; then
+  applications_dir=${XDG_DATA_HOME:-"$HOME/.local/share"}/applications
+  desktop_file=$applications_dir/org.wezfurlong.wezterm.desktop
+  installed_config_dir=$(CDPATH='' cd -- "$config_dir" && pwd)
+  # Desktop Exec values have both string escaping and argument quoting, plus
+  # percent field codes. Never interpret the config path as shell commands.
+  desktop_config=$(printf '%s' "$installed_config_dir/wezterm.lua" |
+    sed -e 's/\\/\\\\\\\\/g' -e 's/["`$]/\\\\&/g' -e 's/%/%%/g')
+  mkdir -p -- "$applications_dir"
+  backup_existing "$desktop_file"
+  cat > "$desktop_file" <<EOF
+[Desktop Entry]
+Name=WezTerm
+Comment=Wez's Terminal Emulator
+Keywords=shell;prompt;command;commandline;cmd;
+Icon=org.wezfurlong.wezterm
+StartupWMClass=org.wezfurlong.wezterm
+TryExec=wezterm
+Exec=wezterm --config-file "$desktop_config" start --always-new-process --cwd .
+Type=Application
+Categories=System;TerminalEmulator;Utility;
+Terminal=false
+EOF
+  echo "Installed desktop launcher in $desktop_file"
 fi
 
 echo "Installed WezTerm configuration in $config_dir"

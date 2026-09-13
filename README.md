@@ -17,6 +17,14 @@ The script copies only the files needed at runtime to
 can then be moved or removed. Existing configuration and command files are
 renamed with a timestamped `.backup-*` suffix before replacement.
 
+On Linux, it also installs `org.wezfurlong.wezterm.desktop` in
+`${XDG_DATA_HOME:-~/.local/share}/applications`. This user launcher overrides
+the system WezTerm launcher and explicitly selects the installed configuration
+with `--config-file` and starts a fresh GUI with `--always-new-process`.
+Each launch from the app menu or dock opens an independent GUI process. An
+existing user launcher is backed up before replacement. Custom `--config-dir`
+destinations are also recorded in this launcher as absolute paths.
+
 To use non-default destinations, pass either or both options:
 
 ```bash
@@ -37,7 +45,7 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 
 | File | Function added to WezTerm |
 | --- | --- |
-| `install.sh` | Installs a relocatable runtime copy of the configuration and its helper commands. |
+| `install.sh` | Installs a relocatable runtime copy, helper commands, and a Linux desktop launcher that starts a fresh GUI with the installed configuration. |
 | `wezterm.lua` | Builds the configuration and applies enabled feature modules in their listed order. |
 | `features/window_backend.lua` | Runs WezTerm through XWayland so window-edge UI such as the scrollbar renders reliably on Ubuntu Wayland. |
 | `features/rendering_backend.lua` | Selects WebGPU as a workaround to try for text redraw flicker with the default OpenGL renderer under XWayland. |
@@ -83,9 +91,22 @@ wezterm --config-file "$PWD/wezterm.lua" start --always-new-process
 ```
 
 Check typing in both the shell and the application that flickered, and check
-that the scrollbar still renders. If it works, run `./install.sh`, then fully
-quit and reopen WezTerm when your running work permits. Renderer changes need
-a new process; reloading the configuration alone is insufficient.
+that the scrollbar still renders. If it works, run `./install.sh`, then open
+WezTerm from the app menu or dock. The installed launcher uses the same explicit
+configuration and fresh-process options; existing windows keep their running
+work. Renderer changes need a new process; reloading alone is insufficient.
+
+The installed copy was also confirmed flicker-free when launched with:
+
+```bash
+wezterm --config-file "$HOME/.config/wezterm/wezterm.lua" start --always-new-process
+```
+
+The system launcher (`wezterm start --cwd .`) still exhibited flicker with the
+same installed Lua files. The user launcher preserves the working launch
+options; the precise cause of the different rendering behavior is unconfirmed.
+Custom keyboard shortcuts that directly run `wezterm start` should likewise use
+the explicit installed config path and `--always-new-process`.
 
 If WebGPU fails to start or makes rendering worse, compare the same checkout
 using the original renderer without editing or installing anything:
