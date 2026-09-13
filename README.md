@@ -242,9 +242,9 @@ its containing tab.
   Ordinary user tasks that request titles or return JSON still notify. This
   compatibility filter is needed because the legacy notification payload does
   not include the thread's internal/ephemeral classification.
-  The host worker explicitly closes the notification
-  after 0.5 seconds when the originating tab is active and after 3 seconds
-  otherwise, even when the desktop ignores its requested expiration timeout.
+  The host worker requests a two-second expiration and explicitly closes the
+  notification after two seconds, even when the desktop ignores its requested
+  expiration timeout.
   Dismissing it does not change focus or acknowledge the pink tab indicator.
   The `codex-wezterm-notify` command must be available inside the environment
   where Codex runs; containerized Codex images should install their own copy.
