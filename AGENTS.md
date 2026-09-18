@@ -42,6 +42,23 @@ If the feature needs the WezTerm API, require it inside that module:
 local wezterm = require("wezterm")
 ```
 
+## Display session compatibility
+
+- Every feature, new or existing, must work in both Wayland and X11 desktop
+  sessions. The machine switches between them; X11 is the current daily
+  session, and Wayland must keep working.
+- Never hard-code a single session type in a setting that behaves differently
+  per display server (window backend, renderer, decorations, scrollbar,
+  notifications, clipboard, and similar). Branch on
+  `require("features.display_session").detect()` instead.
+- `features/display_session.lua` is a helper: it has no `apply(config)` and is
+  not registered in `wezterm.lua`. Do not duplicate its detection logic.
+- When a fix is validated in only one session type, say so in the README and
+  keep the other session type's previously working settings unchanged.
+- Include both session types in validation: load the config with
+  `XDG_SESSION_TYPE=x11` and `XDG_SESSION_TYPE=wayland`, and note which one was
+  tested visually.
+
 ## Registering features
 
 - Add every new feature module to the `features` table in `wezterm.lua`.
@@ -65,6 +82,9 @@ local wezterm = require("wezterm")
 ## Validation
 
 - Check Lua syntax for every changed Lua file when a Lua checker is available.
+- Confirm the config loads under both `XDG_SESSION_TYPE=x11` and
+  `XDG_SESSION_TYPE=wayland`, for example with
+  `XDG_SESSION_TYPE=x11 wezterm --config-file "$PWD/wezterm.lua" show-keys`.
 - Start or reload WezTerm after structural changes and confirm that no config
   error is reported.
 - Review the final diff for undocumented files, unrelated changes, and key

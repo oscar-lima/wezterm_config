@@ -47,8 +47,9 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 | --- | --- |
 | `install.sh` | Installs a relocatable runtime copy, helper commands, and a Linux desktop launcher that starts a fresh GUI with the installed configuration. |
 | `wezterm.lua` | Builds the configuration and applies enabled feature modules in their listed order. |
-| `features/window_backend.lua` | Enables native Wayland to avoid the terminal-app text redraw flicker reproduced under XWayland. |
-| `features/rendering_backend.lua` | Selects WebGPU, the renderer tested with native Wayland. |
+| `features/display_session.lua` | Helper (no `apply`) that detects whether the desktop session is Wayland or X11 so other features can branch on it. |
+| `features/window_backend.lua` | Enables native Wayland in Wayland sessions (avoids the XWayland text redraw flicker) and disables it explicitly in X11 sessions. |
+| `features/rendering_backend.lua` | Selects WebGPU in Wayland sessions and OpenGL in X11 sessions, where WebGPU left a stale window ghost after minimizing. |
 | `features/color_scheme.lua` | Selects the `Gruvbox Dark (Gogh)` color scheme. |
 | `features/text_cursor.lua` | Uses a steady bar cursor and disables cursor blinking to reduce distracting redraws. |
 | `features/codex_notifications.lua` | Relays containerized Codex completion events to timed, clickable host notifications. |
@@ -65,26 +66,46 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 | `integrations/codex-hooks.toml` | Provides Codex lifecycle hooks for tab state. |
 | `integrations/opencode-agent-state.js` | Provides an opencode plugin for tab state. |
 
+## Display session detection
+
+The configuration must work in both Wayland and X11 desktop sessions, because
+the session type changes over time on the affected machine. `features/display_session.lua`
+reads `XDG_SESSION_TYPE` (falling back to `WAYLAND_DISPLAY`, then X11) and
+backend-sensitive features branch on its result rather than assuming one
+session type. Check what a running window detected with:
+
+```bash
+for p in $(pgrep wezterm-gui); do tr '\0' '\n' < /proc/$p/environ | grep -E '^(XDG_SESSION_TYPE|WAYLAND_DISPLAY)='; done
+```
+
 ## Window backend
 
-WezTerm enables its native Wayland backend (`enable_wayland = true`). On the
-affected NVIDIA/GNOME desktop, text disappeared and reappeared while typing in
-terminal applications under XWayland. Running the same affected application
-with native Wayland stopped the observed flicker, and the green scrollbar was
-confirmed usable in that same window. Plain shell typing was stable in both
-cases.
+In Wayland sessions WezTerm enables its native Wayland backend
+(`enable_wayland = true`). On the affected NVIDIA/GNOME desktop, text
+disappeared and reappeared while typing in terminal applications under
+XWayland. Running the same affected application with native Wayland stopped the
+observed flicker, and the green scrollbar was confirmed usable in that same
+window. Plain shell typing was stable in both cases.
+
+In X11 sessions (GNOME on Xorg) `enable_wayland` is set to `false` explicitly;
+WezTerm is then a plain X11 client and the XWayland flicker does not apply.
 
 The earlier native-Wayland fix (`3d5cf4d`) was undone by the scrollbar workaround
-(`5233ad6`). Keep native Wayland enabled and address any scrollbar problems in
-`features/scrollbar.lua` separately, so that a scrollbar change does not restore
-the flickering backend. See WezTerm's
+(`5233ad6`). Keep native Wayland enabled for Wayland sessions and address any
+scrollbar problems in `features/scrollbar.lua` separately, so that a scrollbar
+change does not restore the flickering backend. See WezTerm's
 [Wayland option documentation](https://wezterm.org/config/lua/config/enable_wayland.html).
 
-## Rendering backend and typing flicker
+## Rendering backend, typing flicker, and minimize ghost
 
-The renderer remains `WebGpu`, as used in the successful native-Wayland test.
+Wayland sessions use `WebGpu`, as used in the successful native-Wayland test.
 WebGPU alone did not resolve the flicker while XWayland remained enabled.
-See WezTerm's [renderer documentation](https://wezterm.org/config/lua/config/front_end.html).
+
+X11 sessions use `OpenGL`. With `WebGpu` (Vulkan on the NVIDIA driver) under
+GNOME on Xorg, minimizing WezTerm left a stale, non-interactive ghost of the
+window on screen until it was restored from the dock. OpenGL is the renderer to
+use there. See WezTerm's
+[renderer documentation](https://wezterm.org/config/lua/config/front_end.html).
 
 From this checkout, test the configuration in a separate GUI process before
 installing it:
@@ -93,11 +114,12 @@ installing it:
 wezterm --config-file "$PWD/wezterm.lua" start --always-new-process
 ```
 
-Check typing in both the shell and the application that flickered, and check
-that the scrollbar still renders. If it works, run `./install.sh`, then open
-WezTerm from the app menu or dock. The installed launcher uses the same explicit
-configuration and fresh-process options; existing windows keep their running
-work. Renderer changes need a new process; reloading alone is insufficient.
+Check typing in both the shell and the application that flickered, check that
+the scrollbar still renders, and minimize and restore the window. If it works,
+run `./install.sh`, then open WezTerm from the app menu or dock. The installed
+launcher uses the same explicit configuration and fresh-process options;
+existing windows keep their running work. Renderer and window-backend changes
+need a new process; reloading alone is insufficient.
 
 To test the installed configuration directly:
 
@@ -105,18 +127,18 @@ To test the installed configuration directly:
 wezterm --config-file "$HOME/.config/wezterm/wezterm.lua" start --always-new-process
 ```
 
-The explicit config path and fresh-process launcher ensure startup uses the
-installed settings, but did not by themselves eliminate flicker. Validate in
-the affected terminal application while it produces output, not just at a
-plain shell prompt. Existing XWayland windows need to be replaced with new
-windows when their running work permits; config reload cannot change their
-display backend.
-
-If WebGPU fails to start or makes rendering worse, compare the same checkout
-using the original renderer without editing or installing anything:
+To compare the other renderer in the same checkout without editing or
+installing anything:
 
 ```bash
-wezterm --config-file "$PWD/wezterm.lua" --config 'front_end="OpenGL"' start --always-new-process
+wezterm --config-file "$PWD/wezterm.lua" --config 'front_end="WebGpu"' start --always-new-process
+```
+
+To simulate the other session type's settings without logging out, override the
+detected session (the window still runs on the current display server):
+
+```bash
+XDG_SESSION_TYPE=wayland wezterm --config-file "$PWD/wezterm.lua" start --always-new-process
 ```
 
 ## Text cursor
