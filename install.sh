@@ -5,10 +5,11 @@ set -eu
 
 usage() {
   cat <<'EOF'
-usage: ./install.sh [--config-dir DIR] [--bin-dir DIR]
+usage: ./install.sh [--config-dir DIR] [--bin-dir DIR] [--opencode-plugins-dir DIR]
 
 Copies the WezTerm configuration to ~/.config/wezterm (or $XDG_CONFIG_HOME/wezterm)
-and its helper commands to ~/.local/bin by default.
+and its helper commands to ~/.local/bin by default, and the opencode agent-state
+plugin to ~/.config/opencode/plugins (or $XDG_CONFIG_HOME/opencode/plugins).
 On Linux, also installs a user desktop launcher under $XDG_DATA_HOME/applications
 (or ~/.local/share/applications) that starts a fresh GUI with the installed config.
 EOF
@@ -23,6 +24,7 @@ source_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 default_config_dir=${XDG_CONFIG_HOME:-"$HOME/.config"}/wezterm
 config_dir=$default_config_dir
 bin_dir=$HOME/.local/bin
+opencode_plugins_dir=${XDG_CONFIG_HOME:-"$HOME/.config"}/opencode/plugins
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -34,6 +36,11 @@ while [ "$#" -gt 0 ]; do
     --bin-dir)
       [ "$#" -ge 2 ] || { usage >&2; exit 2; }
       bin_dir=$2
+      shift 2
+      ;;
+    --opencode-plugins-dir)
+      [ "$#" -ge 2 ] || { usage >&2; exit 2; }
+      opencode_plugins_dir=$2
       shift 2
       ;;
     -h|--help)
@@ -85,6 +92,12 @@ for command in wezterm-agent-state wezterm-tab-task codex-wezterm-notify; do
   chmod 755 "$destination"
 done
 
+mkdir -p -- "$opencode_plugins_dir"
+opencode_plugin=$opencode_plugins_dir/opencode-agent-state.js
+backup_existing "$opencode_plugin"
+cp -- "$source_dir/integrations/opencode-agent-state.js" "$opencode_plugin"
+echo "Installed opencode plugin in $opencode_plugin"
+
 # ~/.wezterm.lua takes precedence on some WezTerm installations.
 if [ "$config_dir" = "$default_config_dir" ]; then
   backup_existing "$HOME/.wezterm.lua"
@@ -118,6 +131,7 @@ fi
 
 echo "Installed WezTerm configuration in $config_dir"
 echo "Installed helper commands in $bin_dir"
+echo "Installed opencode plugin in $opencode_plugins_dir/opencode-agent-state.js"
 
 case ":${PATH:-}:" in
   *:"$bin_dir":*) ;;

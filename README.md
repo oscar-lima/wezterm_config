@@ -13,9 +13,11 @@ Run the installer from any checkout location:
 The script copies only the files needed at runtime to
 `$XDG_CONFIG_HOME/wezterm` when `XDG_CONFIG_HOME` is set, or to
 `~/.config/wezterm` otherwise. It installs the helper commands in
-`~/.local/bin`. The installed configuration is self-contained, so the checkout
-can then be moved or removed. Existing configuration and command files are
-renamed with a timestamped `.backup-*` suffix before replacement.
+`~/.local/bin` and the opencode agent-state plugin in
+`~/.config/opencode/plugins/`. The installed configuration is
+self-contained, so the checkout can then be moved or removed. Existing
+configuration and command files are renamed with a timestamped `.backup-*`
+suffix before replacement.
 
 On Linux, it also installs `org.wezfurlong.wezterm.desktop` in
 `${XDG_DATA_HOME:-~/.local/share}/applications`. This user launcher overrides
@@ -25,10 +27,11 @@ Each launch from the app menu or dock opens an independent GUI process. An
 existing user launcher is backed up before replacement. Custom `--config-dir`
 destinations are also recorded in this launcher as absolute paths.
 
-To use non-default destinations, pass either or both options:
+To use non-default destinations, pass either or all of these options:
 
 ```bash
-./install.sh --config-dir /path/to/wezterm-config --bin-dir /path/to/bin
+./install.sh --config-dir /path/to/wezterm-config --bin-dir /path/to/bin \
+  --opencode-plugins-dir /path/to/opencode-plugins
 ```
 
 Make sure `~/.local/bin` (or the selected `--bin-dir`) is on `PATH`. Re-run the
@@ -45,7 +48,7 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 
 | File | Function added to WezTerm |
 | --- | --- |
-| `install.sh` | Installs a relocatable runtime copy, helper commands, and a Linux desktop launcher that starts a fresh GUI with the installed configuration. |
+| `install.sh` | Installs a relocatable runtime copy, helper commands, the opencode agent-state plugin, and a Linux desktop launcher that starts a fresh GUI with the installed configuration. |
 | `wezterm.lua` | Builds the configuration and applies enabled feature modules in their listed order. |
 | `features/display_session.lua` | Helper (no `apply`) that detects whether the desktop session is Wayland or X11 so other features can branch on it. |
 | `features/window_backend.lua` | Enables native Wayland in Wayland sessions (avoids the XWayland text redraw flicker) and disables it explicitly in X11 sessions. |
@@ -272,9 +275,13 @@ its containing tab.
   where Codex runs; containerized Codex images should install their own copy.
   Use `wezterm-agent-state failed` manually or from an additional local hook
   when a surrounding workflow detects failure.
-- opencode: copy `integrations/opencode-agent-state.js` to
-  `~/.config/opencode/plugins/`. It uses documented session, permission, and
-  tool events to cover all four states.
+- opencode: `install.sh` places `integrations/opencode-agent-state.js` in
+  `~/.config/opencode/plugins/`, which opencode auto-loads at startup. It uses
+  documented session, permission, and tool events to cover all four states.
+  opencode reads its plugin directory only when it starts, so restart opencode
+  after installing or updating the plugin; the state is published to the
+  WezTerm pane opencode itself runs in. Without the installer, copy the file to
+  `~/.config/opencode/plugins/` manually.
 
 Run notification regression tests without sending desktop alerts:
 

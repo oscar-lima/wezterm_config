@@ -19,13 +19,18 @@ class InstallTests(unittest.TestCase):
             base = Path(temporary)
             config = base / "config with spaces"
             helpers = base / "bin"
+            opencode_plugins = base / "opencode-plugins"
             data = base / "data"
             desktop = data / "applications/org.wezfurlong.wezterm.desktop"
             desktop.parent.mkdir(parents=True)
             original = "[Desktop Entry]\nName=Previous launcher\n"
             desktop.write_text(original)
+            opencode_original = "export const Previous = async () => ({})\n"
+            opencode_plugins.mkdir(parents=True)
+            (opencode_plugins / "opencode-agent-state.js").write_text(opencode_original)
             command = [str(ROOT / "install.sh"), "--config-dir", config.name,
-                       "--bin-dir", str(helpers)]
+                       "--bin-dir", str(helpers),
+                       "--opencode-plugins-dir", str(opencode_plugins)]
             environment = {**os.environ, "XDG_DATA_HOME": str(data)}
 
             for _ in range(2):
@@ -42,6 +47,13 @@ class InstallTests(unittest.TestCase):
                 self.assertEqual(source.read_bytes(),
                                  (config / source.relative_to(ROOT)).read_bytes())
             self.assertTrue(os.access(helpers / "wezterm-agent-state", os.X_OK))
+            opencode_plugin = opencode_plugins / "opencode-agent-state.js"
+            self.assertEqual(
+                (ROOT / "integrations/opencode-agent-state.js").read_bytes(),
+                opencode_plugin.read_bytes())
+            self.assertIn(opencode_original, [p.read_text() for p in
+                          opencode_plugins.glob("*.backup-*")])
+            self.assertEqual(len(list(opencode_plugins.glob("*.backup-*"))), 2)
             if shutil.which("desktop-file-validate"):
                 subprocess.run(["desktop-file-validate", str(desktop)], check=True,
                                capture_output=True, text=True)
