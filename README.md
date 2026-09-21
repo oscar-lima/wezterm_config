@@ -57,6 +57,7 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 | `features/text_cursor.lua` | Uses a steady bar cursor and disables cursor blinking to reduce distracting redraws. |
 | `features/codex_notifications.lua` | Relays containerized Codex completion events to timed, clickable host notifications. |
 | `features/initial_pane_layout.lua` | Starts the GUI and new tabs with consistently proportioned side-by-side panes and adds Alt+PageUp/PageDown navigation between them. |
+| `features/middle_click_paste.lua` | Keeps middle-click pasting the primary selection inside applications that capture the mouse, such as opencode. |
 | `features/pane_working_directory_sync.lua` | Keeps the right pane in the left pane's working directory whenever the right pane is at a shell prompt. |
 | `features/scrollbar.lua` | Shows a green scrollbar in the right-side padding of each WezTerm window and retains up to 100,000 lines of scrollback per tab. |
 | `features/tab_navigation.lua` | Adds Alt+Left/Right tab cycling and Alt+1–9 direct tab selection. |
@@ -143,6 +144,26 @@ detected session (the window still runs on the current display server):
 ```bash
 XDG_SESSION_TYPE=wayland wezterm --config-file "$PWD/wezterm.lua" start --always-new-process
 ```
+
+## Middle-click paste inside mouse-capturing applications
+
+Terminal applications such as opencode enable mouse reporting (`?1000h`,
+`?1003h`, `?1006h`) so they can handle scrolling and clicks themselves. Once an
+application reports the mouse, WezTerm forwards every mouse event to it, so a
+plain middle-click no longer triggers WezTerm's default
+`PasteFrom PrimarySelection` and nothing is pasted.
+
+`features/middle_click_paste.lua` binds a single middle-click to
+`PasteFrom PrimarySelection` twice: once for the normal case and once with
+`mouse_reporting = true`, which makes the binding match even while an
+application has captured the mouse. Middle-click therefore pastes everywhere.
+Text selection is not changed: in a mouse-capturing application, hold Shift
+while dragging (WezTerm's default `bypass_mouse_reporting_modifiers`) to select
+text, or use copy mode. Forcing plain drag to select would break the
+application's own drag handling.
+
+Validated in an X11 session with opencode 1.18.31; the binding is independent
+of the display server and is the same in Wayland sessions.
 
 ## Text cursor
 

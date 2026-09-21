@@ -42,6 +42,24 @@ If the feature needs the WezTerm API, require it inside that module:
 local wezterm = require("wezterm")
 ```
 
+## Installability
+
+- Every fix or new setting must live in this repository and be delivered by
+  `./install.sh`, never only in the installed copy under `~/.config/wezterm`,
+  `~/.local/bin`, or `~/.config/opencode/plugins`. Another person cloning this
+  repository and running the installer must get the same behavior.
+- Do not edit the installed copy by hand. Change the repository, then re-run
+  `./install.sh` to refresh the installed copy.
+- Keep settings user agnostic: no home-directory paths, user names, or
+  machine-specific values in Lua files or helper commands. Derive locations
+  from `HOME`, `XDG_*` variables, or installer options.
+- When a new runtime file is added outside `wezterm.lua`, `features/*.lua`,
+  `bin/`, or `integrations/`, extend `install.sh` and `tests/test_install.py`
+  so the file is installed and its installation is tested.
+- Before finishing a change, diff the installed copy against the checkout
+  (for example `diff -r features ~/.config/wezterm/features`) and resolve any
+  drift by moving it into the repository.
+
 ## Display session compatibility
 
 - Every feature, new or existing, must work in both Wayland and X11 desktop
