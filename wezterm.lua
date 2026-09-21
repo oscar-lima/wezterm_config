@@ -3,7 +3,7 @@ local config = wezterm.config_builder()
 local color_scheme = require("features.color_scheme")
 local codex_notifications = require("features.codex_notifications")
 local initial_pane_layout = require("features.initial_pane_layout")
-local middle_click_paste = require("features.middle_click_paste")
+local mouse_selection_and_paste = require("features.mouse_selection_and_paste")
 local pane_working_directory_sync = require("features.pane_working_directory_sync")
 local rendering_backend = require("features.rendering_backend")
 local scrollbar = require("features.scrollbar")
@@ -21,7 +21,7 @@ local features = {
   { module = codex_notifications, enabled = true },
   { module = tab_titles, enabled = true },
   { module = initial_pane_layout, enabled = true },
-  { module = middle_click_paste, enabled = true },
+  { module = mouse_selection_and_paste, enabled = true },
   { module = pane_working_directory_sync, enabled = true },
   { module = scrollbar, enabled = true },
   { module = tab_navigation, enabled = true },

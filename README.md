@@ -57,7 +57,7 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 | `features/text_cursor.lua` | Uses a steady bar cursor and disables cursor blinking to reduce distracting redraws. |
 | `features/codex_notifications.lua` | Relays containerized Codex completion events to timed, clickable host notifications. |
 | `features/initial_pane_layout.lua` | Starts the GUI and new tabs with consistently proportioned side-by-side panes and adds Alt+PageUp/PageDown navigation between them. |
-| `features/middle_click_paste.lua` | Keeps middle-click pasting the primary selection inside applications that capture the mouse, such as opencode. |
+| `features/mouse_selection_and_paste.lua` | Keeps plain-mouse text selection (click, double-click word, triple-click line, drag) and middle-click paste of the primary selection working inside applications that capture the mouse, such as opencode. |
 | `features/pane_working_directory_sync.lua` | Keeps the right pane in the left pane's working directory whenever the right pane is at a shell prompt. |
 | `features/scrollbar.lua` | Shows a green scrollbar in the right-side padding of each WezTerm window and retains up to 100,000 lines of scrollback per tab. |
 | `features/tab_navigation.lua` | Adds Alt+Left/Right tab cycling and Alt+1–9 direct tab selection. |
@@ -145,25 +145,30 @@ detected session (the window still runs on the current display server):
 XDG_SESSION_TYPE=wayland wezterm --config-file "$PWD/wezterm.lua" start --always-new-process
 ```
 
-## Middle-click paste inside mouse-capturing applications
+## Mouse selection and paste inside mouse-capturing applications
 
 Terminal applications such as opencode enable mouse reporting (`?1000h`,
 `?1003h`, `?1006h`) so they can handle scrolling and clicks themselves. Once an
-application reports the mouse, WezTerm forwards every mouse event to it, so a
-plain middle-click no longer triggers WezTerm's default
-`PasteFrom PrimarySelection` and nothing is pasted.
+application reports the mouse, WezTerm forwards every mouse event to it: a
+plain drag no longer creates a terminal selection, double-click no longer
+selects a word, and middle-click never reaches WezTerm's
+`PasteFrom PrimarySelection`. opencode then runs its own selection, shows a
+"copied to clipboard" toast, and writes to the clipboard rather than the
+primary selection, so a middle-click pastes whatever was in the primary
+selection before.
 
-`features/middle_click_paste.lua` binds a single middle-click to
-`PasteFrom PrimarySelection` twice: once for the normal case and once with
-`mouse_reporting = true`, which makes the binding match even while an
-application has captured the mouse. Middle-click therefore pastes everywhere.
-Text selection is not changed: in a mouse-capturing application, hold Shift
-while dragging (WezTerm's default `bypass_mouse_reporting_modifiers`) to select
-text, or use copy mode. Forcing plain drag to select would break the
-application's own drag handling.
+`features/mouse_selection_and_paste.lua` re-declares WezTerm's default
+left-button bindings (single click and drag by cell, double-click by word,
+triple-click by line, release copies to the primary selection or opens a link)
+and the middle-click paste with `mouse_reporting = true`, so they take
+precedence over the application. The mouse then behaves like in a plain shell:
+select with the left button, paste with the middle button. The scroll wheel and
+modifier+click combinations are not bound, so they still reach the
+application; use Ctrl+click for opencode's own click handling.
 
-Validated in an X11 session with opencode 1.18.31; the binding is independent
-of the display server and is the same in Wayland sessions.
+Validated in an X11 session with opencode 1.18.31. The bindings are independent
+of the display server; the primary selection is provided by both X11 and
+Wayland.
 
 ## Text cursor
 
