@@ -53,6 +53,7 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 | `features/display_session.lua` | Helper (no `apply`) that detects whether the desktop session is Wayland or X11 so other features can branch on it. |
 | `features/window_backend.lua` | Enables native Wayland in Wayland sessions (avoids the XWayland text redraw flicker) and disables it explicitly in X11 sessions. |
 | `features/rendering_backend.lua` | Selects WebGPU in Wayland sessions and OpenGL in X11 sessions, where WebGPU left a stale window ghost after minimizing. |
+| `features/input_method.lua` | Disables the IME in X11 sessions, where the XIM bridge leaks X windows and stalls the whole desktop on screen-size changes, and keeps it enabled in Wayland sessions. |
 | `features/color_scheme.lua` | Selects the `Gruvbox Dark (Gogh)` color scheme. |
 | `features/text_cursor.lua` | Uses a steady bar cursor and disables cursor blinking to reduce distracting redraws. |
 | `features/codex_notifications.lua` | Relays containerized Codex completion events to timed, clickable host notifications. |
@@ -144,6 +145,41 @@ detected session (the window still runs on the current display server):
 ```bash
 XDG_SESSION_TYPE=wayland wezterm --config-file "$PWD/wezterm.lua" start --always-new-process
 ```
+
+## Input method and the X11 window leak
+
+X11 sessions set `use_ime = false`. With an input method running
+(`XMODIFIERS=@im=ibus`), WezTerm opens an XIM context per pane, and neither
+WezTerm nor `ibus-x11` destroys the 1x1 helper window that each context
+creates. Both clients accumulate children of the X root window; on the machine
+where this was diagnosed the pair grew by roughly 2500 windows per hour.
+
+The cost lands on the X server, not on WezTerm. Every screen-size change makes
+Xorg call `SetRootClip`, which walks the root window's children in
+`miMarkOverlappedWindows`. With tens of thousands of leaked windows that walk
+takes minutes of solid CPU inside Xorg, during which the whole desktop stops
+responding. Docking, undocking, opening the laptop lid, and resuming from
+suspend all triggered it; a profile of the stalled server spent 98% of its time
+in `miMarkOverlappedWindows`, reached from `ProcRRSetScreenSize`.
+
+Wayland sessions keep `use_ime = true`. Text input there uses
+`text-input-v3`, which does not create XIM windows and shows no leak.
+
+Disabling the IME also disables compose sequences and dead keys inside WezTerm.
+Layouts that produce their characters directly, such as `de` with the
+`nodeadkeys` variant, are unaffected. Set `enabled = false` for this module in
+`wezterm.lua` if an input method is needed in an X11 session; the leak returns
+with it.
+
+Count the leaked windows in an X11 session, before and after a change:
+
+```bash
+xwininfo -root -children | grep -c '0x'
+```
+
+A healthy session stays near one hundred. The count only drops when the
+leaking clients exit, so restart WezTerm (and `ibus restart`) after installing
+this configuration rather than expecting a reload to free them.
 
 ## Mouse selection and paste inside mouse-capturing applications
 

@@ -3,6 +3,7 @@ local config = wezterm.config_builder()
 local color_scheme = require("features.color_scheme")
 local codex_notifications = require("features.codex_notifications")
 local initial_pane_layout = require("features.initial_pane_layout")
+local input_method = require("features.input_method")
 local mouse_selection_and_paste = require("features.mouse_selection_and_paste")
 local pane_working_directory_sync = require("features.pane_working_directory_sync")
 local rendering_backend = require("features.rendering_backend")
@@ -16,6 +17,7 @@ local window_backend = require("features.window_backend")
 local features = {
   { module = window_backend, enabled = true },
   { module = rendering_backend, enabled = true },
+  { module = input_method, enabled = true },
   { module = color_scheme, enabled = true },
   { module = text_cursor, enabled = true },
   { module = codex_notifications, enabled = true },
