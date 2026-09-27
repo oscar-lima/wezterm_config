@@ -35,7 +35,10 @@ To use non-default destinations, pass either or all of these options:
 ```
 
 Make sure `~/.local/bin` (or the selected `--bin-dir`) is on `PATH`. Re-run the
-installer after changing this repository to refresh the installed copy.
+installer after changing this repository to refresh the installed copy. Editing
+the checkout does not update a running WezTerm instance: the installer copies
+files rather than linking them, and the desktop launcher uses that installed
+copy. Run `./install.sh` only when the changes are ready to use.
 
 Verify that WezTerm can see the entry point and load the configuration:
 
@@ -57,13 +60,13 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 | `features/color_scheme.lua` | Selects the `Gruvbox Dark (Gogh)` color scheme. |
 | `features/text_cursor.lua` | Uses a steady bar cursor and disables cursor blinking to reduce distracting redraws. |
 | `features/codex_notifications.lua` | Relays containerized Codex completion events to timed, clickable host notifications. |
-| `features/initial_pane_layout.lua` | Starts the GUI and new tabs with consistently proportioned side-by-side panes and adds Alt+PageUp/PageDown navigation between them. |
+| `features/initial_pane_layout.lua` | Starts the GUI and new tabs with a left pane and three stacked right panes, configures optional programs for the top and middle right panes, and adds Alt+PageUp/PageDown navigation between columns. |
 | `features/mouse_selection_and_paste.lua` | Keeps plain-mouse text selection (click, double-click word, triple-click line, drag) and middle-click paste of the primary selection working inside applications that capture the mouse, such as opencode. |
-| `features/pane_working_directory_sync.lua` | Keeps the right pane in the left pane's working directory whenever the right pane is at a shell prompt. |
+| `features/pane_working_directory_sync.lua` | Keeps each right pane in the left pane's working directory whenever that right pane is at a shell prompt. |
 | `features/scrollbar.lua` | Shows a green scrollbar in the right-side padding of each WezTerm window and retains up to 100,000 lines of scrollback per tab. |
 | `features/tab_navigation.lua` | Adds Alt+Left/Right tab cycling and Alt+1–9 direct tab selection. |
 | `features/tab_titles.lua` | Names tabs after the active pane's working directory, adds colored and focus-aware agent states, and provides attention-tab navigation. |
-| `features/two_pane_tab_controls.lua` | Adds Ctrl+W closing of the current tab with both panes. |
+| `features/two_pane_tab_controls.lua` | Adds Ctrl+W closing of the current tab with all its panes. |
 | `bin/wezterm-agent-state` | Provides the low-level lifecycle interface used by agent integrations to publish pane state. |
 | `bin/wezterm-tab-task` | Provides the manual `pending` and `done` tab-task interface. |
 | `bin/codex-wezterm-notify` | Sends Codex completion events through the originating terminal and runs the host notification worker. |
@@ -213,10 +216,11 @@ is disabled globally, including when an application requests a blinking cursor.
 
 ## Initial pane layout
 
-Each new WezTerm GUI starts with two terminal panes arranged side by side. New
-tabs opened with Ctrl+Shift+T, Super+T, or the tab-bar `+` button use the same
-layout. Alt+PageUp focuses the pane to the left, and Alt+PageDown focuses the
-pane to the right.
+Each new WezTerm GUI starts with a full-height left pane and a right column
+containing top, middle, and bottom terminal panes. New tabs opened with
+Ctrl+Shift+T, Super+T, or the tab-bar `+` button use the same layout.
+Alt+PageUp focuses the pane to the left, and Alt+PageDown focuses the pane to
+the right.
 
 The initial GUI split is created on the first resize event, with the first
 status update as a fallback. Its measured pane widths are then corrected to the
@@ -224,19 +228,26 @@ configured percentage after startup resizing finishes, matching later tabs.
 
 Alt+Left/Right move between tabs. Alt+Shift+A jumps to the next tab that is
 unread, failed, waiting for input, or manually pending. Pane focus remains on
-Alt+PageUp/PageDown. Ctrl+W closes the current tab, including both panes that
+Alt+PageUp/PageDown. Ctrl+W closes the current tab, including all panes that
 belong to it.
 
 Set `left_pane_percentage` near the top of
 `features/initial_pane_layout.lua` to control the initial proportions. For
-example, `50` gives both panes equal space. The configured value is `60`, giving
+example, `50` gives both columns equal space. The configured value is `60`, giving
 the left pane 60% and the right pane 40%. The value must be greater than `0` and
-less than `100`.
+less than `100`. The right column uses 20% of its height for the top pane, 60%
+for the middle, and 20% for the bottom.
+
+Set `top_pane_program` and `middle_pane_program` near the top of
+`features/initial_pane_layout.lua` to argument lists such as `{ "htop" }` or
+`{ "python3", "-m", "http.server" }`. Their default empty lists `{}` open
+normal terminals. The bottom pane always opens a normal terminal. A configured
+program starts when a new GUI or tab opens; if it exits, that pane closes.
 
 The left pane is authoritative for the working directory. If its directory
-changes, the right pane follows within about half a second once the right pane
-is back at a Bash, Zsh, Fish, Dash, or POSIX shell prompt. A program running in
-the right pane is not interrupted; synchronization resumes when it exits.
+changes, each right pane follows within about half a second once that pane is
+at a Bash, Zsh, Fish, Dash, or POSIX shell prompt. A program running in a
+right pane is not interrupted.
 
 ## Tab titles and agent state
 

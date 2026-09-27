@@ -1,4 +1,4 @@
--- Start the WezTerm GUI with two side-by-side panes.
+-- Start the WezTerm GUI with a left pane and three stacked right panes.
 local wezterm = require("wezterm")
 local act = wezterm.action
 local mux = wezterm.mux
@@ -7,6 +7,9 @@ local M = {}
 
 -- Set this to the percentage of the window that the left pane should occupy.
 local left_pane_percentage = 60
+-- Empty lists launch the normal shell. Use argv lists such as { "htop" }.
+local top_pane_program = {}
+local middle_pane_program = {}
 local startup_pane_states = {}
 
 local function validate_left_pane_percentage()
@@ -18,14 +21,25 @@ local function validate_left_pane_percentage()
   )
 end
 
+local function program_args(program)
+  return #program > 0 and program or nil
+end
+
 local function split_pane(left_pane)
-  -- pane:split sizes the new right pane, so use the percentage left over.
-  left_pane:split({
+  -- The original right pane becomes the middle; new splits fill its edges.
+  local middle_pane = left_pane:split({
     direction = "Right",
     size = (100 - left_pane_percentage) / 100,
+    args = program_args(middle_pane_program),
+  })
+  middle_pane:split({ direction = "Bottom", size = 0.2 })
+  middle_pane:split({
+    direction = "Top",
+    size = 0.25, -- 25% of the remaining 80% is 20% of the right column.
+    args = program_args(top_pane_program),
   })
 
-  -- Splitting activates the new right pane, so restore focus to the left.
+  -- Splitting activates the new top pane, so restore focus to the left.
   left_pane:activate()
 end
 
@@ -46,12 +60,22 @@ local function normalize_startup_pane(window)
         split_pane(panes[1].pane)
         return
       end
-    elseif #panes == 2 and panes[1].top == panes[2].top then
-      local left = panes[1].left < panes[2].left and panes[1] or panes[2]
-      local right = panes[1].left < panes[2].left and panes[2] or panes[1]
+    elseif #panes == 4 then
+      local left, right
+      for _, pane in ipairs(panes) do
+        if not left or pane.left < left.left then
+          left = pane
+        end
+      end
+      for _, pane in ipairs(panes) do
+        if pane.left > left.left then
+          right = pane
+          break
+        end
+      end
       local left_pane_id = left.pane:pane_id()
 
-      if startup_pane_states[left_pane_id] == "split" then
+      if right and startup_pane_states[left_pane_id] == "split" then
         local pane_columns = left.width + right.width
         local target_left_width = math.floor(pane_columns * left_pane_percentage / 100)
         local adjustment = target_left_width - left.width

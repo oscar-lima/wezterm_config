@@ -10,7 +10,7 @@ function M.apply(config)
   table.insert(config.keys, {
     key = "w",
     mods = "CTRL",
-    -- Close the tab container so that both panes are closed together.
+    -- Close the tab container so that all panes are closed together.
     action = act.CloseCurrentTab({ confirm = false }),
   })
 end
