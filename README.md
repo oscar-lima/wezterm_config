@@ -65,7 +65,7 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 | `features/pane_working_directory_sync.lua` | Keeps each right pane in the left pane's working directory whenever that right pane is at a shell prompt. |
 | `features/scrollbar.lua` | Shows a green scrollbar in the right-side padding of each WezTerm window and retains up to 100,000 lines of scrollback per tab. |
 | `features/tab_navigation.lua` | Adds Alt+Left/Right tab cycling and Alt+1–9 direct tab selection. |
-| `features/tab_titles.lua` | Names tabs after the active pane's working directory, adds colored and focus-aware agent states, and provides attention-tab navigation. |
+| `features/tab_titles.lua` | Names tabs after an explicit tab title or the active pane's working directory, adds colored and focus-aware agent states, and provides attention-tab navigation. |
 | `features/two_pane_tab_controls.lua` | Adds Ctrl+W closing of the current tab with all its panes. |
 | `bin/wezterm-agent-state` | Provides the low-level lifecycle interface used by agent integrations to publish pane state. |
 | `bin/wezterm-tab-task` | Provides the manual `pending` and `done` tab-task interface. |
@@ -251,7 +251,10 @@ right pane is not interrupted.
 
 ## Tab titles and agent state
 
-Tab titles use the active pane's working-directory basename. A trailing `src`
+A title set explicitly with `wezterm cli set-tab-title` (or the tab's rename
+action) wins; agent teams use it to show each agent's role. An empty title
+(`set-tab-title ""`) returns the tab to automatic naming. Otherwise tab titles
+use the active pane's working-directory basename. A trailing `src`
 directory is treated as a workspace marker, so `/path/to/example_ws/src` is
 shown as `example_ws`. Tabs allow up to 40 cells so typical repository and
 workspace names remain visible; WezTerm may still shorten them when the window

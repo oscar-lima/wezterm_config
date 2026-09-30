@@ -1,4 +1,4 @@
--- Name tabs after their working directory and show structured agent state.
+-- Name tabs after an explicit tab title or their working directory and show structured agent state.
 local wezterm = require("wezterm")
 
 local M = {}
@@ -38,13 +38,14 @@ end
 local function title_for_tab(tab)
   local active_pane = tab.active_pane
 
+  -- An explicit title (wezterm cli set-tab-title, e.g. an agent's role) wins.
+  if tab.tab_title and #tab.tab_title > 0 then
+    return tab.tab_title
+  end
+
   local cwd_title = title_from_working_directory(active_pane)
   if cwd_title and #cwd_title > 0 then
     return cwd_title
-  end
-
-  if tab.tab_title and #tab.tab_title > 0 then
-    return tab.tab_title
   end
 
   return active_pane.title
