@@ -319,7 +319,13 @@ its containing tab.
   entries for events already present in `settings.json` must be appended to
   that event's list rather than replacing it.
 - Codex: merge `integrations/codex-hooks.toml` into
-  `~/.codex/config.toml`. Current hooks cover running, permission requests, and
+  `~/.codex/config.toml` and start Codex with `codex --no-daemon`. Since Codex
+  0.159 a shared app-server daemon (started once per machine from whichever tab
+  ran Codex first) executes every session's hooks and `notify` command with
+  that first tab's environment and no terminal, so `wezterm-agent-state` finds
+  the wrong `WEZTERM_PANE` and no tty and every Codex tab stays grey;
+  `--no-daemon` runs the session in the tab's own process tree again.
+  Current hooks cover running, permission requests, and
   successful turn completion. The integration disables Codex's built-in
   terminal-title updates and TUI alerts, preserving the working-directory title
   rendered by WezTerm and using `bin/codex-wezterm-notify` exclusively for

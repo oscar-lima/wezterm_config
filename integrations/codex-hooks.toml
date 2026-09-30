@@ -1,4 +1,6 @@
 # Merge these lifecycle hooks into ~/.codex/config.toml.
+# Start Codex with `codex --no-daemon`: the shared app-server daemon runs hooks
+# with the environment of the tab that started it, so the tab state goes astray.
 notify = ["codex-wezterm-notify"]
 
 [tui]
