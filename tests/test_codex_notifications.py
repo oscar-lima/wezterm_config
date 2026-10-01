@@ -225,6 +225,7 @@ class NotificationTests(unittest.TestCase):
             )
         command = popen.call_args.args[0]
         self.assertIn("--wait", command)
+        self.assertIn("--transient", command)
         self.assertIn("--expire-time=2000", command)
         close.assert_called_once_with("42")
 

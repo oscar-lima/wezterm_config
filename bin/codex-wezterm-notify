@@ -251,6 +251,7 @@ def show_host_notification(
             notifier,
             "--print-id",
             "--wait",
+            "--transient",
             "--app-name=Codex",
             "--urgency=normal",
             f"--expire-time={timeout_ms}",
