@@ -5,13 +5,15 @@ set -eu
 
 usage() {
   cat <<'EOF'
-usage: ./install.sh [--config-dir DIR] [--bin-dir DIR] [--opencode-plugins-dir DIR]
+usage: ./install.sh [--config-dir DIR] [--bin-dir DIR] [--opencode-plugins-dir DIR] [--systemd-dir DIR] [--enable-systemd]
 
 Copies the WezTerm configuration to ~/.config/wezterm (or $XDG_CONFIG_HOME/wezterm)
 and its helper commands to ~/.local/bin by default, and the opencode agent-state
 plugin to ~/.config/opencode/plugins (or $XDG_CONFIG_HOME/opencode/plugins).
 On Linux, also installs a user desktop launcher under $XDG_DATA_HOME/applications
 (or ~/.local/share/applications) that starts a fresh GUI with the installed config.
+Also installs the user units of the X window leak check (wezterm-xim-count) under
+$XDG_CONFIG_HOME/systemd/user; --enable-systemd also enables and starts them.
 EOF
 }
 
@@ -25,6 +27,8 @@ default_config_dir=${XDG_CONFIG_HOME:-"$HOME/.config"}/wezterm
 config_dir=$default_config_dir
 bin_dir=$HOME/.local/bin
 opencode_plugins_dir=${XDG_CONFIG_HOME:-"$HOME/.config"}/opencode/plugins
+systemd_dir=${XDG_CONFIG_HOME:-"$HOME/.config"}/systemd/user
+enable_systemd=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -42,6 +46,15 @@ while [ "$#" -gt 0 ]; do
       [ "$#" -ge 2 ] || { usage >&2; exit 2; }
       opencode_plugins_dir=$2
       shift 2
+      ;;
+    --systemd-dir)
+      [ "$#" -ge 2 ] || { usage >&2; exit 2; }
+      systemd_dir=$2
+      shift 2
+      ;;
+    --enable-systemd)
+      enable_systemd=1
+      shift
       ;;
     -h|--help)
       usage
@@ -85,12 +98,27 @@ chmod 755 "$staging_dir/bin/codex-wezterm-notify"
 backup_existing "$config_dir"
 mv -- "$staging_dir" "$config_dir"
 
-for command in wezterm-agent-state wezterm-tab-task codex-wezterm-notify; do
+for command in wezterm-agent-state wezterm-tab-task codex-wezterm-notify wezterm-xim-count; do
   destination=$bin_dir/$command
   backup_existing "$destination"
   cp -- "$source_dir/bin/$command" "$destination"
   chmod 755 "$destination"
 done
+
+# #302: the check that WezTerm's hidden X windows stay flat (a timer) and the suspend/resume logger
+mkdir -p -- "$systemd_dir"
+bin_escaped=$(printf '%s' "$bin_dir" | sed 's/[&|\\]/\\&/g')
+for unit in wezterm-xim-count.service wezterm-xim-count.timer wezterm-xim-sleep-log.service; do
+  backup_existing "$systemd_dir/$unit"
+  sed "s|@BIN_DIR@|$bin_escaped|g" "$source_dir/systemd/$unit" > "$systemd_dir/$unit"
+done
+echo "Installed X window leak check units in $systemd_dir"
+if [ "$enable_systemd" = 1 ]; then
+  systemctl --user daemon-reload
+  systemctl --user enable --now wezterm-xim-count.timer wezterm-xim-sleep-log.service
+else
+  echo "Enable them with: systemctl --user daemon-reload && systemctl --user enable --now wezterm-xim-count.timer wezterm-xim-sleep-log.service"
+fi
 
 mkdir -p -- "$opencode_plugins_dir"
 opencode_plugin=$opencode_plugins_dir/opencode-agent-state.js

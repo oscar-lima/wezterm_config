@@ -1,0 +1,7 @@
+[Unit]
+Description=Count WezTerm's hidden X windows (#302): log the count, notify above 500
+
+[Service]
+Type=oneshot
+# @BIN_DIR@ is replaced by install.sh with the helper command directory
+ExecStart=@BIN_DIR@/wezterm-xim-count --log --event timer --notify-above 500

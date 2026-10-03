@@ -1,0 +1,261 @@
+#!/usr/bin/env python3
+"""Count the child windows of the X root window per X client and flag a leak (WezTerm XIM windows, #302).
+
+WezTerm 20240203 leaks one hidden 1x1 root window per focus change while it talks to an XIM server (ibus). Past 65,535
+windows every Tk and Xlib program aborts at start, and thousands of them freeze X on undock or suspend. `xwininfo` cannot
+show it (its 16-bit child count wraps), so this reads the full reply with xcb, groups the windows by the client's XID base
+(resource_id_base of the X setup) and maps a base to a process through that client's own top-level windows
+(_NET_CLIENT_LIST + _NET_WM_PID, as `wmctrl -lp` lists them). A query that fails is UNKNOWN, never 0. A healthy desktop has a few hundred root children in all.
+
+  wezterm-xim-count                   print the counts (exit 0)
+  wezterm-xim-count --log             also append one line to the log (default: $XDG_STATE_HOME/wezterm-xim/count.log)
+  wezterm-xim-count --notify-above N  desktop notification once when the WezTerm count crosses N (default 500)
+  wezterm-xim-count --growth N        also notify when the WezTerm count grew by more than N since the last check (default 100)
+  wezterm-xim-count --event LABEL     tag the log line (the systemd timer uses "timer")
+  wezterm-xim-count --watch-sleep     stay running; log the count at every suspend and resume (logind PrepareForSleep)
+  wezterm-xim-count --json            machine readable output
+"""
+
+import argparse
+import collections
+import ctypes
+import datetime
+import json
+import os
+import subprocess
+import sys
+import time
+
+DEFAULT_THRESHOLD = 500
+DEFAULT_GROWTH = 100
+
+
+def state_dir():
+    base = os.environ.get("XDG_STATE_HOME") or os.path.join(os.path.expanduser("~"), ".local", "state")
+    return os.path.join(base, "wezterm-xim")
+
+
+def root_children():
+    """(window ids of the root's children, the X resource id mask) from one xcb QueryTree, or raise OSError."""
+    xcb = ctypes.CDLL("libxcb.so.1")
+    xcb.xcb_connect.restype = ctypes.c_void_p
+    xcb.xcb_connect.argtypes = [ctypes.c_char_p, ctypes.POINTER(ctypes.c_int)]
+    connection = xcb.xcb_connect(None, None)
+    xcb.xcb_connection_has_error.argtypes = [ctypes.c_void_p]
+    if not connection or xcb.xcb_connection_has_error(connection):
+        raise OSError("no X connection")
+    xcb.xcb_get_setup.restype = ctypes.c_void_p
+    xcb.xcb_get_setup.argtypes = [ctypes.c_void_p]
+    setup = xcb.xcb_get_setup(connection)
+    # xcb_setup_t: resource_id_base at byte 12, resource_id_mask at byte 16
+    mask = ctypes.cast(setup + 16, ctypes.POINTER(ctypes.c_uint32))[0]
+
+    class Iterator(ctypes.Structure):
+        _fields_ = [("data", ctypes.c_void_p), ("rem", ctypes.c_int), ("index", ctypes.c_int)]
+
+    xcb.xcb_setup_roots_iterator.restype = Iterator
+    xcb.xcb_setup_roots_iterator.argtypes = [ctypes.c_void_p]
+    root = ctypes.cast(xcb.xcb_setup_roots_iterator(setup).data, ctypes.POINTER(ctypes.c_uint32))[0]
+    xcb.xcb_query_tree.restype = ctypes.c_uint
+    xcb.xcb_query_tree.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+    xcb.xcb_query_tree_reply.restype = ctypes.c_void_p
+    xcb.xcb_query_tree_reply.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_void_p]
+    reply = xcb.xcb_query_tree_reply(connection, xcb.xcb_query_tree(connection, root), None)
+    if not reply:
+        raise OSError("QueryTree on the root window failed")
+    length = ctypes.cast(reply, ctypes.POINTER(ctypes.c_uint32))[1]   # children_len of xcb_query_tree_reply_t
+    children = ctypes.cast(reply + 32, ctypes.POINTER(ctypes.c_uint32))
+    ids = [children[i] for i in range(length)]
+    xcb.xcb_disconnect.argtypes = [ctypes.c_void_p]
+    xcb.xcb_disconnect(connection)
+    return ids, mask
+
+
+def window_pids(mask, listing=None):
+    """{client base: pid} from the window manager's client list (`wmctrl -lp` = _NET_CLIENT_LIST + _NET_WM_PID): a client's
+    top-level windows share its XID base with its hidden root windows. None when the list cannot be read."""
+    if listing is None:
+        try:
+            result = subprocess.run(["wmctrl", "-lp"], capture_output=True, text=True, timeout=10)
+            if result.returncode != 0:
+                return None
+            listing = result.stdout
+        except (OSError, subprocess.SubprocessError):
+            return None
+    pids = {}
+    for line in listing.splitlines():
+        fields = line.split(None, 3)
+        if len(fields) >= 3 and fields[0].startswith("0x") and fields[2].isdigit() and int(fields[2]) > 0:
+            pids.setdefault(int(fields[0], 16) & ~mask & 0xFFFFFFFF, int(fields[2]))
+    return pids
+
+
+def process_name(pid):
+    try:
+        with open(f"/proc/{pid}/comm") as handle:
+            return handle.read().strip()
+    except OSError:
+        return ""
+
+
+def process_start(pid):
+    """Start time of the process in clock ticks since boot (field 22 of /proc/PID/stat), to tell a restart from a leak."""
+    try:
+        with open(f"/proc/{pid}/stat") as handle:
+            return int(handle.read().rsplit(")", 1)[1].split()[19])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def summarize(ids, mask, pids, names=process_name, starts=process_start):
+    """Group the window ids per client (id & ~mask is the client's base); the WezTerm count sums every wezterm client.
+    pids None (window list unreadable) makes the WezTerm count None = UNKNOWN."""
+    per_client = collections.Counter(window & ~mask & 0xFFFFFFFF for window in ids)
+    clients = []
+    for base, count in per_client.most_common():
+        pid = (pids or {}).get(base)
+        clients.append({"base": hex(base), "windows": count, "pid": pid, "name": names(pid) if pid else "",
+                        "start": starts(pid) if pid else None})
+    wezterm = None if pids is None else sum(c["windows"] for c in clients if c["name"].startswith("wezterm"))
+    return {"total": len(ids), "wezterm": wezterm, "clients": clients}
+
+
+def measure():
+    ids, mask = root_children()
+    return summarize(ids, mask, window_pids(mask))
+
+
+def log_line(summary, event, now=None):
+    stamp = (now or datetime.datetime.now()).strftime("%Y-%m-%dT%H:%M:%S")
+    top = ",".join(f"{c['name'] or c['base']}" + (f"[{c['pid']}@{c['start']}]" if c["pid"] else "") + f"={c['windows']}"
+                   for c in summary["clients"][:3])
+    wezterm = "UNKNOWN" if summary["wezterm"] is None else summary["wezterm"]
+    return f"{stamp} event={event} total={summary['total']} wezterm={wezterm} top={top}"
+
+
+def unknown_line(event, error, now=None):
+    stamp = (now or datetime.datetime.now()).strftime("%Y-%m-%dT%H:%M:%S")
+    return f"{stamp} event={event} total=UNKNOWN wezterm=UNKNOWN error={error}"
+
+
+def decide_growth(previous, current, limit):
+    """Notify when the WezTerm count grew by more than limit since the previous check (None = no previous or unknown)."""
+    return previous is not None and current is not None and current - previous > limit
+
+
+def decide_notify(count, notified, threshold):
+    """(send a notification now?, new notified flag): once per crossing, re-armed when the count falls below half."""
+    if count > threshold and not notified:
+        return True, True
+    if count < threshold / 2:
+        return False, False
+    return False, notified
+
+
+def append_log(path, line):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "a") as handle:
+        handle.write(line + "\n")
+
+
+def notify(summary, threshold, grew=False):
+    body = (f"WezTerm owns {summary['wezterm']} hidden X windows ({'grew fast since the last check; ' if grew else ''}"
+            f"limit to worry: {threshold}; at 65,535 every Tk app "
+            "fails to start, thousands freeze X on suspend). See #302; install wezterm_config (xim_im_name fix, #302) and restart WezTerm.")
+    subprocess.run(["notify-send", "-u", "critical", "-a", "wezterm-xim-count", "WezTerm is leaking X windows", body],
+                   check=False, timeout=10)
+
+
+def read_last(path):
+    try:
+        with open(path) as handle:
+            return int(handle.read().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def one_check(args):
+    try:
+        summary = measure()
+    except OSError as exc:   # no DISPLAY, no X server, xcb failure: UNKNOWN, never 0
+        if args.log is not None:
+            append_log(args.log, unknown_line(args.event, exc))
+        raise
+    if args.json:
+        print(json.dumps(summary))
+    else:
+        wezterm = "UNKNOWN (window list unreadable)" if summary["wezterm"] is None else summary["wezterm"]
+        print(f"root children: {summary['total']}  wezterm: {wezterm}")
+        for client in summary["clients"][:5]:
+            who = f"{client['name'] or '?'} pid {client['pid']} start {client['start']}" if client["pid"] else "?"
+            print(f"  {client['base']:>10} {client['windows']:>7}  {who}")
+    if args.log is not None:
+        append_log(args.log, log_line(summary, args.event))
+    if summary["wezterm"] is None:
+        return summary   # never alert on, or store, an unknown count
+    flag_path = os.path.join(state_dir(), "notified")
+    last_path = os.path.join(state_dir(), "last_wezterm")
+    notified = os.path.exists(flag_path)
+    grew = decide_growth(read_last(last_path), summary["wezterm"], args.growth)
+    send, now_flag = decide_notify(summary["wezterm"], notified, args.notify_above)
+    if send or grew:
+        notify(summary, args.notify_above, grew)
+    os.makedirs(state_dir(), exist_ok=True)
+    with open(last_path, "w") as handle:
+        handle.write(str(summary["wezterm"]))
+    if now_flag != notified:
+        if now_flag:
+            open(flag_path, "w").close()
+        else:
+            os.remove(flag_path)
+    return summary
+
+
+def sleep_edge(line):
+    """'pre' for a logind PrepareForSleep (true) line (going to sleep), 'post' for (false) (resumed), else None."""
+    if "PrepareForSleep" not in line:
+        return None
+    return "pre" if "true" in line else "post" if "false" in line else None
+
+
+def watch_sleep(args):
+    command = ["gdbus", "monitor", "--system", "--dest", "org.freedesktop.login1", "--object-path",
+               "/org/freedesktop/login1"]
+    with subprocess.Popen(command, stdout=subprocess.PIPE, text=True) as monitor:
+        for line in monitor.stdout:
+            edge = sleep_edge(line)
+            if edge:
+                if edge == "post":
+                    time.sleep(2)   # let the session settle before counting
+                try:
+                    summary = measure()
+                    append_log(args.log, log_line(summary, f"sleep-{edge}"))
+                except OSError as exc:
+                    append_log(args.log, unknown_line(f"sleep-{edge}", exc))
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--log", nargs="?", const=os.path.join(state_dir(), "count.log"), default=None,
+                        help="append a line to this file (default path when given without a value)")
+    parser.add_argument("--notify-above", type=int, default=DEFAULT_THRESHOLD)
+    parser.add_argument("--growth", type=int, default=DEFAULT_GROWTH,
+                        help="notify when the WezTerm count grew by more than this since the last check")
+    parser.add_argument("--event", default="manual")
+    parser.add_argument("--watch-sleep", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args(argv)
+    try:
+        if args.watch_sleep:
+            args.log = args.log or os.path.join(state_dir(), "count.log")
+            watch_sleep(args)
+        else:
+            one_check(args)
+    except OSError as exc:
+        print(f"wezterm-xim-count: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

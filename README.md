@@ -69,6 +69,7 @@ wezterm show-keys --lua | grep "mods = 'ALT'"
 | `features/two_pane_tab_controls.lua` | Adds Ctrl+W closing of the current tab with all its panes. |
 | `bin/wezterm-agent-state` | Provides the low-level lifecycle interface used by agent integrations to publish pane state. |
 | `bin/wezterm-tab-task` | Provides the manual `pending` and `done` tab-task interface. |
+| `bin/wezterm-xim-count` | Counts the hidden X root windows per client (WezTerm leaks XIM windows, #302), logs the count, notifies above 500 and logs it at suspend and resume. Installed with the user units in `systemd/` (`./install.sh --enable-systemd` starts the 10-minute timer and the sleep logger). |
 | `bin/codex-wezterm-notify` | Sends Codex completion events through the originating terminal and runs the host notification worker. |
 | `integrations/claude-code-hooks.json` | Provides Claude Code lifecycle hooks for tab state. |
 | `integrations/codex-hooks.toml` | Provides Codex lifecycle hooks for tab state. |

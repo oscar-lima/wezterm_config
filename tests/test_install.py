@@ -21,6 +21,7 @@ class InstallTests(unittest.TestCase):
             helpers = base / "bin"
             opencode_plugins = base / "opencode-plugins"
             data = base / "data"
+            systemd = base / "systemd user"
             desktop = data / "applications/org.wezfurlong.wezterm.desktop"
             desktop.parent.mkdir(parents=True)
             original = "[Desktop Entry]\nName=Previous launcher\n"
@@ -30,6 +31,7 @@ class InstallTests(unittest.TestCase):
             (opencode_plugins / "opencode-agent-state.js").write_text(opencode_original)
             command = [str(ROOT / "install.sh"), "--config-dir", config.name,
                        "--bin-dir", str(helpers),
+                       "--systemd-dir", str(systemd),
                        "--opencode-plugins-dir", str(opencode_plugins)]
             environment = {**os.environ, "XDG_DATA_HOME": str(data)}
 
@@ -47,6 +49,13 @@ class InstallTests(unittest.TestCase):
                 self.assertEqual(source.read_bytes(),
                                  (config / source.relative_to(ROOT)).read_bytes())
             self.assertTrue(os.access(helpers / "wezterm-agent-state", os.X_OK))
+            self.assertTrue(os.access(helpers / "wezterm-xim-count", os.X_OK))
+            for unit in ("wezterm-xim-count.service", "wezterm-xim-sleep-log.service"):
+                text = (systemd / unit).read_text()
+                self.assertNotIn("@BIN_DIR@", text)
+                self.assertIn(f"ExecStart={helpers}/wezterm-xim-count", text)
+            self.assertTrue((systemd / "wezterm-xim-count.timer").exists())
+            self.assertEqual(len(list(systemd.glob("*.backup-*"))), 3)   # the second run backed up the first
             opencode_plugin = opencode_plugins / "opencode-agent-state.js"
             self.assertEqual(
                 (ROOT / "integrations/opencode-agent-state.js").read_bytes(),
