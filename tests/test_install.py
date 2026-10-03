@@ -50,12 +50,12 @@ class InstallTests(unittest.TestCase):
                                  (config / source.relative_to(ROOT)).read_bytes())
             self.assertTrue(os.access(helpers / "wezterm-agent-state", os.X_OK))
             self.assertTrue(os.access(helpers / "wezterm-xim-count", os.X_OK))
-            for unit in ("wezterm-xim-count.service", "wezterm-xim-sleep-log.service"):
+            for unit in ("wezterm-xim-count.service",):
                 text = (systemd / unit).read_text()
                 self.assertNotIn("@BIN_DIR@", text)
                 self.assertIn(f"ExecStart={helpers}/wezterm-xim-count", text)
             self.assertTrue((systemd / "wezterm-xim-count.timer").exists())
-            self.assertEqual(len(list(systemd.glob("*.backup-*"))), 3)   # the second run backed up the first
+            self.assertEqual(len(list(systemd.glob("*.backup-*"))), 2)   # the second run backed up the first
             opencode_plugin = opencode_plugins / "opencode-agent-state.js"
             self.assertEqual(
                 (ROOT / "integrations/opencode-agent-state.js").read_bytes(),

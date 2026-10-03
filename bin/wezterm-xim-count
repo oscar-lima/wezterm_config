@@ -12,7 +12,6 @@ show it (its 16-bit child count wraps), so this reads the full reply with xcb, g
   wezterm-xim-count --notify-above N  desktop notification once when the WezTerm count crosses N (default 500)
   wezterm-xim-count --growth N        also notify when the WezTerm count grew by more than N since the last check (default 100)
   wezterm-xim-count --event LABEL     tag the log line (the systemd timer uses "timer")
-  wezterm-xim-count --watch-sleep     stay running; log the count at every suspend and resume (logind PrepareForSleep)
   wezterm-xim-count --json            machine readable output
 """
 
@@ -24,7 +23,6 @@ import json
 import os
 import subprocess
 import sys
-import time
 
 DEFAULT_THRESHOLD = 500
 DEFAULT_GROWTH = 100
@@ -211,29 +209,6 @@ def one_check(args):
     return summary
 
 
-def sleep_edge(line):
-    """'pre' for a logind PrepareForSleep (true) line (going to sleep), 'post' for (false) (resumed), else None."""
-    if "PrepareForSleep" not in line:
-        return None
-    return "pre" if "true" in line else "post" if "false" in line else None
-
-
-def watch_sleep(args):
-    command = ["gdbus", "monitor", "--system", "--dest", "org.freedesktop.login1", "--object-path",
-               "/org/freedesktop/login1"]
-    with subprocess.Popen(command, stdout=subprocess.PIPE, text=True) as monitor:
-        for line in monitor.stdout:
-            edge = sleep_edge(line)
-            if edge:
-                if edge == "post":
-                    time.sleep(2)   # let the session settle before counting
-                try:
-                    summary = measure()
-                    append_log(args.log, log_line(summary, f"sleep-{edge}"))
-                except OSError as exc:
-                    append_log(args.log, unknown_line(f"sleep-{edge}", exc))
-
-
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--log", nargs="?", const=os.path.join(state_dir(), "count.log"), default=None,
@@ -242,15 +217,10 @@ def main(argv=None):
     parser.add_argument("--growth", type=int, default=DEFAULT_GROWTH,
                         help="notify when the WezTerm count grew by more than this since the last check")
     parser.add_argument("--event", default="manual")
-    parser.add_argument("--watch-sleep", action="store_true")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     try:
-        if args.watch_sleep:
-            args.log = args.log or os.path.join(state_dir(), "count.log")
-            watch_sleep(args)
-        else:
-            one_check(args)
+        one_check(args)
     except OSError as exc:
         print(f"wezterm-xim-count: {exc}", file=sys.stderr)
         return 1

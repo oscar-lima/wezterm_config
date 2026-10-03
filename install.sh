@@ -105,19 +105,19 @@ for command in wezterm-agent-state wezterm-tab-task codex-wezterm-notify wezterm
   chmod 755 "$destination"
 done
 
-# #302: the check that WezTerm's hidden X windows stay flat (a timer) and the suspend/resume logger
+# #302: the check that WezTerm's hidden X windows stay flat (a timer)
 mkdir -p -- "$systemd_dir"
 bin_escaped=$(printf '%s' "$bin_dir" | sed 's/[&|\\]/\\&/g')
-for unit in wezterm-xim-count.service wezterm-xim-count.timer wezterm-xim-sleep-log.service; do
+for unit in wezterm-xim-count.service wezterm-xim-count.timer; do
   backup_existing "$systemd_dir/$unit"
   sed "s|@BIN_DIR@|$bin_escaped|g" "$source_dir/systemd/$unit" > "$systemd_dir/$unit"
 done
 echo "Installed X window leak check units in $systemd_dir"
 if [ "$enable_systemd" = 1 ]; then
   systemctl --user daemon-reload
-  systemctl --user enable --now wezterm-xim-count.timer wezterm-xim-sleep-log.service
+  systemctl --user enable --now wezterm-xim-count.timer
 else
-  echo "Enable them with: systemctl --user daemon-reload && systemctl --user enable --now wezterm-xim-count.timer wezterm-xim-sleep-log.service"
+  echo "Enable them with: systemctl --user daemon-reload && systemctl --user enable --now wezterm-xim-count.timer"
 fi
 
 mkdir -p -- "$opencode_plugins_dir"

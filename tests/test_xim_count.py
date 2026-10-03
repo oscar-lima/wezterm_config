@@ -1,4 +1,4 @@
-"""Offline tests of wezterm-xim-count (#302): grouping per client, notification hysteresis, log line, sleep edges."""
+"""Offline tests of wezterm-xim-count (#302): grouping per client, notification hysteresis, log line."""
 
 import datetime
 import importlib.machinery
@@ -99,11 +99,6 @@ class LogTests(unittest.TestCase):
         line = count.log_line(summary, "timer", datetime.datetime(2026, 10, 3, 3, 30, 0))
         self.assertEqual(line, "2026-10-03T03:30:00 event=timer total=700 wezterm=640 "
                                "top=wezterm-gui[1@5]=640,ibus-x11[2@6]=50,0x3000000=5")
-
-    def test_sleep_edges(self):
-        self.assertEqual(count.sleep_edge("/org/freedesktop/login1: org.freedesktop.login1.Manager.PrepareForSleep (true,)"), "pre")
-        self.assertEqual(count.sleep_edge("/org/freedesktop/login1: org.freedesktop.login1.Manager.PrepareForSleep (false,)"), "post")
-        self.assertIsNone(count.sleep_edge("/org/freedesktop/login1: org.freedesktop.login1.Manager.SessionNew ('3',)"))
 
 
 if __name__ == "__main__":
